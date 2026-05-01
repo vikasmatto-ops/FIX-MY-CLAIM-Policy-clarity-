@@ -1,1388 +1,129 @@
-/api/claudeimport { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
-const FULL_POLICY_DB = [
+// ─── Embedded Policy Database ────────────────────────────────────────────────
 
-  // ═══════════════════════════════════════════════════════════
-  // STAR HEALTH AND ALLIED INSURANCE
-  // ═══════════════════════════════════════════════════════════
+const POLICY_DB = [
+  {
+    id:"star-comp-001",insurer:"Star Health",product:"Star Comprehensive",tpa:"Star Health TPA",type:"Individual / Floater",sumInsured:[5,10,15,20,25,50],premium_base:8500,networkHospitals:14000,
+    waitingPeriods:{initial:30,ped:48,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Piles / Fissures":12,"Sinusitis":12,"Tonsillitis":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes complications":48,"Hypertension complications":48,"Psychiatric illness":36,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":24}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"any",limit:null,note:"No sub-limit"},
+    subLimits:{"Cataract per eye":40000},maternity:{covered:true,waitingPeriod:12,sublimit:50000},restoration:true,daycare:true,
+    exclusions:["Cosmetic treatment","Obesity (BMI<40)","Dental (non-accident)","Experimental treatment","Self-inflicted injury","War / nuclear","Substance abuse","HIV / AIDS","IVF / Infertility","External congenital"],
+    disclosureRequired:["Diabetes","Hypertension","Heart disease","Cancer","Kidney disease","Thyroid disorder","Asthma","Arthritis","Obesity (BMI>30)","Surgery last 5 years","Hospitalization last 3 years"],
+    cashlessProcess:"Pre-auth min 4 hrs prior (planned), immediate for emergency.",reimbursementTimeline:"30 days",ncb:"5% per year up to 50%",
+    highlights:["No room rent limit","No copay","14000+ network hospitals","Recharge benefit"]
+  },
+  {
+    id:"niva-reassure-002",insurer:"Niva Bupa",product:"ReAssure 2.0",tpa:"Niva Bupa TPA",type:"Individual / Floater",sumInsured:[3,5,7,10,15,20,30,50,100],premium_base:9200,networkHospitals:10000,
+    waitingPeriods:{initial:30,ped:36,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Piles / Fissures":12,"Sinusitis":12,"Tonsillitis":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes complications":36,"Hypertension complications":36,"Psychiatric illness":24,"Benign prostatic hypertrophy":12,"Polycystic ovarian disease":12}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"any",limit:null,note:"No room rent sub-limit"},
+    subLimits:{"Cataract per eye":50000},maternity:{covered:true,waitingPeriod:9,sublimit:75000},restoration:true,daycare:true,
+    exclusions:["Cosmetic","Dental (non-accident)","Obesity","Experimental treatment","HIV/AIDS","Self-inflicted","War","IVF / Infertility","External congenital"],
+    disclosureRequired:["Diabetes","Hypertension","Cardiac conditions","Cancer","Kidney disease","Liver disease","Thyroid","Respiratory","Neurological","Psychiatric","Surgery / hospitalization last 5 years"],
+    cashlessProcess:"Pre-auth 48 hrs prior (planned). Emergency: immediate. Direct settlement.",reimbursementTimeline:"15 days",ncb:"Lock the clock — sum insured never reduces",
+    highlights:["Lock the clock NCB","36-month PED wait","10000+ hospitals","Direct settlement"]
+  },
+  {
+    id:"hdfc-optima-003",insurer:"HDFC Ergo",product:"Optima Secure",tpa:"HDFC Ergo TPA",type:"Individual / Floater",sumInsured:[5,10,15,20,25,50,100,200],premium_base:10500,networkHospitals:13000,
+    waitingPeriods:{initial:30,ped:36,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Piles / Fissures":24,"Sinusitis":24,"Tonsillitis":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes complications":36,"Hypertension complications":36,"Psychiatric illness":36,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":24}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"any",limit:null,note:"No room rent sub-limit"},
+    subLimits:{"Cataract per eye":100000},maternity:{covered:false,waitingPeriod:null,sublimit:null},restoration:true,daycare:true,
+    exclusions:["Cosmetic / aesthetic","Weight reduction","Dental (non-accident)","Experimental","HIV / AIDS","Substance abuse","Self-inflicted","War","IVF / ART","External congenital"],
+    disclosureRequired:["Diabetes","Hypertension","Heart disease","Stroke","Cancer","Kidney disease","Liver disease","Thyroid","COPD / Asthma","Hospitalization last 3 years","Surgery last 5 years","Current medications"],
+    cashlessProcess:"Pre-auth 72 hrs prior. Emergency pre-auth within 24 hrs.",reimbursementTimeline:"30 days",ncb:"50% increase per year up to 100% — Secure Benefit",
+    highlights:["Secure benefit doubles sum insured","No room rent cap","13000+ hospitals","Restore benefit"]
+  },
+  {
+    id:"care-supreme-004",insurer:"Care Health Insurance",product:"Care Supreme",tpa:"Care Health TPA",type:"Individual / Floater",sumInsured:[5,10,15,20,30,50,100],premium_base:7800,networkHospitals:19000,
+    waitingPeriods:{initial:30,ped:48,specificIllness:{"Cataract":12,"Hernia":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Piles / Fissures":12,"Sinusitis":12,"Tonsillitis":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes complications":48,"Hypertension complications":48,"Psychiatric illness":48,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":12}},
+    copay:{applicable:false,percent:0,ped_copay:20},roomRent:{type:"any",limit:null,note:"No room rent sub-limit"},
+    subLimits:{"Cataract per eye":30000},maternity:{covered:true,waitingPeriod:24,sublimit:35000},restoration:true,daycare:true,
+    exclusions:["Cosmetic treatment","Dental (non-accident)","HIV / AIDS","Obesity / weight control","Experimental","War / nuclear","Self-inflicted","Infertility / IVF","External congenital"],
+    disclosureRequired:["Diabetes","Hypertension","Heart disease","Cancer","Kidney disease","Thyroid","Asthma","Arthritis","Neurological","Surgery last 5 years"],
+    cashlessProcess:"Pre-auth 48 hrs prior. Care Health TPA.",reimbursementTimeline:"21 days",ncb:"10% per claim-free year up to 50%",
+    highlights:["19000+ hospitals — largest network","Short specific illness wait","PED copay 20% applies"]
+  },
+  {
+    id:"icici-elevate-005",insurer:"ICICI Lombard",product:"Elevate",tpa:"ICICI Lombard TPA",type:"Individual / Floater",sumInsured:[5,10,15,20,25,50,100,200,500,1000],premium_base:11000,networkHospitals:10000,
+    waitingPeriods:{initial:30,ped:36,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Piles / Fissures":24,"Sinusitis":24,"Tonsillitis":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes complications":36,"Hypertension complications":36,"Psychiatric illness":36,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":24}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"any",limit:null,note:"No sub-limit"},
+    subLimits:{},maternity:{covered:true,waitingPeriod:12,sublimit:100000},restoration:true,daycare:true,
+    exclusions:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF"],
+    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Liver","Thyroid","Neuro","Psychiatric","Surgery history","Hospitalization history","Current medications","Smoking / alcohol"],
+    cashlessProcess:"Digital pre-auth via ICICI Lombard app / portal. Pre-auth 24 hrs prior.",reimbursementTimeline:"30 days",ncb:"Cumulative 10% per year up to 100%",
+    highlights:["Unlimited SI option","No sublimits","Digital pre-auth","Strong maternity"]
+  },
+  {
+    id:"niva-senior-006",insurer:"Niva Bupa",product:"Senior First",tpa:"Niva Bupa TPA",type:"Individual (60+)",sumInsured:[3,5,10,15,20,25],premium_base:18000,networkHospitals:10000,
+    waitingPeriods:{initial:30,ped:24,specificIllness:{"Cataract":12,"Hernia":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Piles / Fissures":12,"Sinusitis":12,"Tonsillitis":12,"Gall bladder stones":12,"Kidney stones":12,"Diabetes complications":24,"Hypertension complications":24,"Psychiatric illness":36,"Benign prostatic hypertrophy":12}},
+    copay:{applicable:true,percent:20,ped_copay:20},roomRent:{type:"any",limit:null,note:"No room rent cap"},
+    subLimits:{"Cataract per eye":40000},maternity:{covered:false,waitingPeriod:null,sublimit:null},restoration:false,daycare:true,
+    exclusions:["Cosmetic","Dental (non-accident)","HIV","Self-harm","War","Obesity","IVF","Experimental"],
+    disclosureRequired:["All chronic conditions mandatory","All medications","All surgeries","All hospitalizations last 10 years","Vision/hearing impairment"],
+    cashlessProcess:"Pre-auth 48 hrs prior. 20% copay applies on ALL claims.",reimbursementTimeline:"30 days",ncb:"5% per year up to 25%",
+    highlights:["Designed for 60+ age","24-month PED wait","20% copay on all claims"]
+  },
+  {
+    id:"bajaj-healthguard-007",insurer:"Bajaj Allianz",product:"Health Guard",tpa:"Bajaj Allianz TPA",type:"Individual / Floater",sumInsured:[1.5,2,3,4,5,7.5,10,15,20,30,50],premium_base:6500,networkHospitals:8000,
+    waitingPeriods:{initial:30,ped:48,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Piles / Fissures":24,"Sinusitis":24,"Tonsillitis":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes complications":48,"Hypertension complications":48,"Psychiatric illness":48,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":24}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"percent_si",limit:1,note:"1% of SI per day — sub-limit RISK"},
+    subLimits:{"Cataract per eye":25000,"Internal prosthesis":50000},maternity:{covered:false,waitingPeriod:null,sublimit:null},restoration:false,daycare:true,
+    exclusions:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF","Genetic disorder"],
+    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Any surgery","Any hospitalization last 3 years"],
+    cashlessProcess:"Pre-auth 3 days prior. Emergency: within 24 hrs. Bajaj Allianz TPA.",reimbursementTimeline:"30 days",ncb:"10% per year up to 50%",
+    highlights:["Affordable premium","Room rent 1% SI/day — major risk for metro hospitals"]
+  },
+  {
+    id:"oriental-happy-008",insurer:"Oriental Insurance",product:"Happy Family Floater",tpa:"Medi Assist",type:"Family Floater",sumInsured:[1,2,3,4,5,6,7,8,9,10,12,15,20],premium_base:5800,networkHospitals:6000,
+    waitingPeriods:{initial:30,ped:48,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Piles / Fissures":24,"Sinusitis":24,"Tonsillitis":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes complications":48,"Hypertension complications":48,"Psychiatric illness":48,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":24}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"fixed",limit:5000,note:"₹5000/day room — RISK in metro hospitals"},
+    subLimits:{"Cataract per eye":20000,"Internal prosthesis":50000},maternity:{covered:true,waitingPeriod:24,sublimit:30000},restoration:false,daycare:true,
+    exclusions:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF"],
+    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Any surgery last 5 years"],
+    cashlessProcess:"Pre-auth 48 hrs. PSU insurer — process can be slow. Medi Assist TPA.",reimbursementTimeline:"30-45 days",ncb:"5% per year up to 25%",
+    highlights:["PSU insurer — government backed","Fixed ₹5000/day room limit — metro hospitals exceed this"]
+  },
+  {
+    id:"newindia-floater-009",insurer:"New India Assurance",product:"New India Floater Mediclaim",tpa:"Vipul Medcorp",type:"Individual / Floater",sumInsured:[2,3,5,8,10,15],premium_base:5200,networkHospitals:7500,
+    waitingPeriods:{initial:30,ped:48,specificIllness:{"Cataract":12,"Hernia":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Piles / Fissures":24,"Sinusitis":12,"Tonsillitis":12,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes complications":48,"Hypertension complications":48,"Psychiatric illness":48,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":24}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"percent_si",limit:1,note:"1% of SI/day — sub-limit risk"},
+    subLimits:{"Cataract per eye":20000},maternity:{covered:true,waitingPeriod:24,sublimit:25000},restoration:false,daycare:true,
+    exclusions:["Cosmetic","Dental","Obesity","HIV","War","Self-harm","IVF","Experimental","Genetic"],
+    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Any surgery","Hospitalization last 3 years"],
+    cashlessProcess:"Pre-auth 48 hrs. Vipul Medcorp TPA.",reimbursementTimeline:"30-45 days",ncb:"5% per year up to 25%",
+    highlights:["Government insurer","Cataract wait only 12 months","Room rent cap risk","Slow settlement"]
+  },
+  {
+    id:"aditya-activ-010",insurer:"Aditya Birla Health",product:"Activ One",tpa:"Aditya Birla TPA",type:"Individual / Floater",sumInsured:[5,10,15,20,30,50,100],premium_base:9800,networkHospitals:11000,
+    waitingPeriods:{initial:30,ped:36,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Piles / Fissures":12,"Sinusitis":12,"Tonsillitis":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes complications":36,"Hypertension complications":36,"Psychiatric illness":36,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":12}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"any",limit:null,note:"No room rent sub-limit"},
+    subLimits:{},maternity:{covered:true,waitingPeriod:12,sublimit:60000},restoration:true,daycare:true,
+    exclusions:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF"],
+    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Neuro","Respiratory","Surgery","Hospitalization last 5 years"],
+    cashlessProcess:"Pre-auth via app 24 hrs prior. Activ Health platform.",reimbursementTimeline:"15 days",ncb:"HealthReturns — earn back premium via fitness",
+    highlights:["HealthReturns wellness benefit","36-month PED wait","No sublimits","Fast 15-day settlement"]
+  },
   {
-    id:"star-001", insurer:"Star Health", product:"Star Comprehensive Insurance Policy",
-    tpa:"Star Health (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,10,15,20,25,50], premium_indicative:"₹8,500+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis (all types)":12,"Tonsillitis":12,"Adenoids":12,"Deviated nasal septum":12,"Knee replacement":24,"Hip replacement":24,"Shoulder replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Endometriosis":24,"Prolapse of inter-vertebral disc":24,"Calculus diseases (all)":12,"Gall bladder stones":12,"Kidney / ureteric stones":12,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Hypospadias":12,"Congenital internal diseases":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":36,"Myopia >7.5 diopter":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0, senior_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000, "AYUSH treatment":25000 },
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:25000, cSection:50000 },
-    daycare:true, restoration:true, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"4 hrs (planned), immediate (emergency)",
-    highlights:["No room rent cap","No copay","Recharge benefit","14k+ hospitals"],
-    exclusions_specific:["Cosmetic / aesthetic treatment","Obesity (BMI<40)","Dental (non-accident)","Experimental","Self-inflicted","War / nuclear","Substance abuse","HIV/AIDS","IVF / Infertility","External congenital"],
-    disclosureRequired:["Diabetes","Hypertension","Heart disease","Cancer history","Kidney disease","Thyroid","Asthma","Arthritis","Surgery in last 5 yrs","Hospitalization last 3 yrs"]
-  },
-  {
-    id:"star-002", insurer:"Star Health", product:"Star Family Health Optima",
-    tpa:"Star Health (In-house)", type:"Family Floater",
-    sumInsured:[3,4,5,10,15,20,25], premium_indicative:"₹7,200+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Deviated nasal septum":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney / ureteric stones":12,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:true, waitingPeriod:36, normalDelivery:15000, cSection:25000 },
-    daycare:true, restoration:true, ncb:"5% per year up to 100% — Auto Recharge",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"4 hrs prior",
-    highlights:["Auto recharge","Floater design","Multiplier benefit"],
-    exclusions_specific:["Cosmetic","Obesity","Dental (non-accident)","Experimental","Self-inflicted","War","HIV/AIDS","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart disease","Cancer","Kidney disease","Thyroid","Asthma","Surgery last 5 yrs"]
-  },
-  {
-    id:"star-003", insurer:"Star Health", product:"Star Senior Citizens Red Carpet",
-    tpa:"Star Health (In-house)", type:"Individual (60–75 yrs)",
-    sumInsured:[1,2,3,4,5,10,15,20,25], premium_indicative:"₹15,000+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:12,
-      specificIllness:{ "Cataract":12,"Hernia":12,"Hydrocele":12,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":12,"Gall bladder stones":12,"Kidney stones":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":12,"Hypertension (complications)":12,"Psychiatric illness":24 }
-    },
-    copay:{ applicable:true, percent:30, ped_copay:30 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent cap" },
-    subLimits:{ "Cataract (per eye)":20000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No pre-policy health check up to 75","PED covered from year 1 (30% copay)","Designed for seniors"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","Self-inflicted","War","HIV","IVF"],
-    disclosureRequired:["All chronic conditions mandatory","All medications","All surgeries","All hospitalizations last 10 yrs","Organ transplants"]
-  },
-  {
-    id:"star-004", insurer:"Star Health", product:"Star Cardiac Care Gold",
-    tpa:"Star Health (In-house)", type:"Individual (cardiac patients)",
-    sumInsured:[3,5,7,10], premium_indicative:"₹22,000+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:0,
-      specificIllness:{ "Angioplasty":0,"Bypass surgery":0,"Valve replacement":0,"Pacemaker":0,"Cataract":24,"Hernia":24,"Knee replacement":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["Covers existing cardiac conditions from day 1","Second opinion benefit","Health checkup included"],
-    exclusions_specific:["Non-cardiac experimental treatment","Obesity","Cosmetic","Dental","IVF"],
-    disclosureRequired:["Full cardiac history mandatory","All cardiac procedures","Current cardiac medications","Other chronic conditions"]
-  },
-  {
-    id:"star-005", insurer:"Star Health", product:"Star Criticare Plus",
-    tpa:"Star Health (In-house)", type:"Individual",
-    sumInsured:[1,2,3,4,5,10,15,20,25], premium_indicative:"₹6,500+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Piles":12,"Sinusitis":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No sub-limit" },
-    subLimits:{ "Cataract (per eye)":30000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"4 hrs prior",
-    highlights:["Critical illness lump sum + hospitalization","Dual cover"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart disease","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"star-006", insurer:"Star Health", product:"Star Women Care",
-    tpa:"Star Health (In-house)", type:"Individual (Women)",
-    sumInsured:[5,10,15,20,25,50], premium_indicative:"₹9,000+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Fibroid uterus":12,"Endometriosis":12,"Polycystic ovarian disease":12,"Ovarian cyst":12,"Cervical cancer":36,"Breast cancer":36,"Piles":12,"Sinusitis":12,"Gall bladder stones":12,"Kidney stones":12 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"4 hrs prior",
-    highlights:["Women-specific coverage","Maternity + newborn cover","Fertility cover add-on","Shorter PCOS wait"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","Self-inflicted","War","HIV"],
-    disclosureRequired:["Diabetes","Hypertension","Cancer history","Gynaecological conditions","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"star-007", insurer:"Star Health", product:"Star Micro Rural Health Care",
-    tpa:"Star Health (In-house)", type:"Individual / Family (Rural)",
-    sumInsured:[0.5,1,1.5,2,2.5], premium_indicative:"₹1,200+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"fixed", limit:2000, icu:4000, note:"₹2000/day room, ₹4000/day ICU" },
-    subLimits:{ "Cataract (per eye)":10000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"4 hrs prior",
-    highlights:["Affordable premium for rural population","Low sum insured options"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart disease","Cancer","Surgery last 3 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // NIVA BUPA HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"nivabupa-001", insurer:"Niva Bupa", product:"ReAssure 2.0",
-    tpa:"Niva Bupa (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,7,10,15,20,30,50,100], premium_indicative:"₹9,200+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Adenoids":12,"Deviated nasal septum":12,"Knee replacement":24,"Hip replacement":24,"Shoulder replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Endometriosis":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney / ureteric stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":24,"Prolapsed disc":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":50000 },
-    maternity:{ covered:true, waitingPeriod:9, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"Lock the Clock — sum insured never reduces on claim",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"48 hrs (planned), immediate (emergency)",
-    highlights:["Lock the Clock NCB","36-month PED wait","Fast 15-day settlement","Direct settlement — no separate TPA"],
-    exclusions_specific:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV/AIDS","Self-inflicted","War","IVF","External congenital"],
-    disclosureRequired:["Diabetes","Hypertension","Cardiac","Cancer","Kidney","Liver","Thyroid","Respiratory","Neurological","Psychiatric","Surgery / hospitalization last 5 yrs"]
-  },
-  {
-    id:"nivabupa-002", insurer:"Niva Bupa", product:"Senior First",
-    tpa:"Niva Bupa (In-house)", type:"Individual (60+)",
-    sumInsured:[3,5,10,15,20,25], premium_indicative:"₹18,000+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:24,
-      specificIllness:{ "Cataract":12,"Hernia":12,"Hydrocele":12,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":12,"Gall bladder stones":12,"Kidney stones":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":24,"Hypertension (complications)":24,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:true, percent:20, ped_copay:20 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent cap" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Senior-specific","24-month PED wait (shorter)","20% copay on all claims"],
-    exclusions_specific:["Cosmetic","Dental","HIV","Self-harm","War","Obesity","IVF","Experimental"],
-    disclosureRequired:["All chronic conditions mandatory","All medications (10 yr history)","All surgeries","All hospitalizations"]
-  },
-  {
-    id:"nivabupa-003", insurer:"Niva Bupa", product:"Health Companion",
-    tpa:"Niva Bupa (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,7.5,10,15,20,30,50], premium_indicative:"₹7,500+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent cap" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Value plan","Wide SI range","10k+ hospitals"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"nivabupa-004", insurer:"Niva Bupa", product:"Aspire",
-    tpa:"Niva Bupa (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,10,15,20,50,100,300], premium_indicative:"₹11,000+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:60000, cSection:100000 },
-    daycare:true, restoration:true, ncb:"No Claim Bonus Shield",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No sublimits on higher SI","Maternity included","Strong restoration"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Cardiac","Cancer","Kidney","Liver","Thyroid","Surgery / hospitalization last 5 yrs"]
-  },
-  {
-    id:"nivabupa-005", insurer:"Niva Bupa", product:"Health Premia",
-    tpa:"Niva Bupa (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,10,15,20,30,50,100], premium_indicative:"₹13,500+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:75000, cSection:125000 },
-    daycare:true, restoration:true, ncb:"Lock the Clock + 20% per year",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["International cover add-on","Comprehensive maternity","No sublimits","Premium plan"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Cardiac","Cancer","Kidney","Liver","Thyroid","All surgeries / hospitalizations"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // HDFC ERGO HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"hdfc-001", insurer:"HDFC Ergo", product:"Optima Secure",
-    tpa:"HDFC Ergo (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,10,15,20,25,50,100,200], premium_indicative:"₹10,500+/yr",
-    networkHospitals:13000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Adenoids":24,"Deviated nasal septum":24,"Knee replacement":24,"Hip replacement":24,"Shoulder replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Endometriosis":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney / ureteric stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36,"Prolapsed disc":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":100000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"Secure Benefit — 50% increase per year up to 100%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs (planned), 24 hrs (emergency)",
-    highlights:["Secure benefit doubles SI","No room rent cap","13k+ hospitals","Restore benefit"],
-    exclusions_specific:["Cosmetic / aesthetic","Weight reduction","Dental (non-accident)","Experimental","HIV / AIDS","Substance abuse","Self-inflicted","War","IVF / ART","External congenital"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Stroke","Cancer","Kidney","Liver","Thyroid","COPD / Asthma","Hospitalization last 3 yrs","Surgery last 5 yrs","Current medications"]
-  },
-  {
-    id:"hdfc-002", insurer:"HDFC Ergo", product:"Optima Restore",
-    tpa:"HDFC Ergo (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,10,15,20,25,50], premium_indicative:"₹8,200+/yr",
-    networkHospitals:13000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":50000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"Restore Benefit — SI restored after 1st claim",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["Restore benefit on 1st claim","No room rent cap","Value for mid-segment"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","Self-inflicted","War","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"hdfc-003", insurer:"HDFC Ergo", product:"Health Suraksha",
-    tpa:"HDFC Ergo (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,7.5,10,15], premium_indicative:"₹5,800+/yr",
-    networkHospitals:13000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day room; 2% ICU" },
-    subLimits:{ "Cataract (per eye)":25000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["Entry-level product","Affordable","Room rent 1% SI — key risk"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","Self-inflicted","War","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"hdfc-004", insurer:"HDFC Ergo", product:"My:Health Suraksha Silver Smart",
-    tpa:"HDFC Ergo (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,7.5,10,15,20,25,50,100,200,500], premium_indicative:"₹7,000+/yr",
-    networkHospitals:13000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":50000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["No room rent cap","Wide SI range","Flexible plan"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // CARE HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"care-001", insurer:"Care Health Insurance", product:"Care Supreme",
-    tpa:"Care Health (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,7,10,15,20,25,30,50,100], premium_indicative:"₹7,800+/yr",
-    networkHospitals:19000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":12,"Hernia (all types)":12,"Hydrocele":12,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Adenoids":12,"Deviated nasal septum":12,"Knee replacement":24,"Hip replacement":24,"Shoulder replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Endometriosis":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney / ureteric stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48,"Prolapsed disc":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:20 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":30000 },
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:25000, cSection:35000 },
-    daycare:true, restoration:true, ncb:"10% per claim-free year up to 50%",
-    reimbursementTimeline:"21 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["19k+ hospitals — India's largest network","Short specific illness waits","PED copay 20% applies"],
-    exclusions_specific:["Cosmetic","Dental (non-accident)","HIV/AIDS","Obesity/weight control","Experimental","War/nuclear","Self-inflicted","Infertility/IVF","External congenital"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Asthma","Arthritis","Neurological","Surgery last 5 yrs"]
-  },
-  {
-    id:"care-002", insurer:"Care Health Insurance", product:"Care Classic",
-    tpa:"Care Health (In-house)", type:"Individual / Family Floater",
-    sumInsured:[4,5,7,10,15,20], premium_indicative:"₹5,500+/yr",
-    networkHospitals:19000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day" },
-    subLimits:{ "Cataract (per eye)":20000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Large network","Affordable","Room rent 1% SI — risk"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"care-003", insurer:"Care Health Insurance", product:"Care Plus",
-    tpa:"Care Health (In-house)", type:"Individual / Family Floater",
-    sumInsured:[10,15,20,30,50,75,100], premium_indicative:"₹10,500+/yr",
-    networkHospitals:19000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":12,"Hernia":12,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"15% per year up to 100%",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["Premium offering","No sublimits","Short specific illness waits","Strong NCB"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Cardiac","Cancer","Kidney","Liver","Thyroid","Surgery / hospitalization"]
-  },
-  {
-    id:"care-004", insurer:"Care Health Insurance", product:"Care Senior",
-    tpa:"Care Health (In-house)", type:"Individual (60+)",
-    sumInsured:[3,5,10,15,20,25], premium_indicative:"₹16,000+/yr",
-    networkHospitals:19000,
-    waitingPeriods:{ initial:30, ped:24,
-      specificIllness:{ "Cataract":12,"Hernia":12,"Piles":12,"Sinusitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Gall bladder stones":12,"Kidney stones":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":24,"Hypertension (complications)":24 }
-    },
-    copay:{ applicable:true, percent:20, ped_copay:20 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":25000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"21 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Senior-specific","24-month PED","19k+ hospitals","20% copay"],
-    exclusions_specific:["Cosmetic","Dental","HIV","Obesity","Experimental","IVF","Self-inflicted","War"],
-    disclosureRequired:["All chronic conditions mandatory","All medications","All surgeries","Hospitalization last 10 yrs"]
-  },
-  {
-    id:"care-005", insurer:"Care Health Insurance", product:"Care Heart",
-    tpa:"Care Health (In-house)", type:"Individual (cardiac patients)",
-    sumInsured:[3,5,7,10,15], premium_indicative:"₹20,000+/yr",
-    networkHospitals:19000,
-    waitingPeriods:{ initial:30, ped:0,
-      specificIllness:{ "Cardiac procedures":0,"Angioplasty":0,"Bypass":0,"Cataract":24,"Hernia":24,"Knee replacement":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"21 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["Covers existing cardiac conditions from day 1","Annual heart health check","Cardiac specialist consult"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF"],
-    disclosureRequired:["Full cardiac history mandatory","All cardiac medications","Other chronic conditions"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // ICICI LOMBARD HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"icici-001", insurer:"ICICI Lombard", product:"Elevate",
-    tpa:"ICICI Lombard (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,10,15,20,25,50,100,200,500,1000], premium_indicative:"₹11,000+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Adenoids":24,"Deviated nasal septum":24,"Knee replacement":24,"Hip replacement":24,"Shoulder replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Endometriosis":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney / ureteric stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36,"Prolapsed disc":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:75000, cSection:100000 },
-    daycare:true, restoration:true, ncb:"Cumulative 10% per year up to 100%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"Digital pre-auth via app — 24 hrs prior",
-    highlights:["Unlimited SI option","No sublimits","Digital pre-auth","Strong maternity"],
-    exclusions_specific:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Liver","Thyroid","Neuro","Psychiatric","Surgery history","Hospitalization history","Current medications","Smoking / alcohol"]
-  },
-  {
-    id:"icici-002", insurer:"ICICI Lombard", product:"Complete Health Insurance",
-    tpa:"ICICI Lombard (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,7.5,10,15,20,25,50], premium_indicative:"₹7,500+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["Established product","No room rent cap","10k+ hospitals"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"icici-003", insurer:"ICICI Lombard", product:"iHealth",
-    tpa:"ICICI Lombard (In-house)", type:"Individual / Family Floater",
-    sumInsured:[2,3,4,5,7.5,10,15,20], premium_indicative:"₹5,500+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI / day" },
-    subLimits:{ "Cataract (per eye)":25000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["Entry level","Room rent 1% SI — risk","Affordable premium"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // BAJAJ ALLIANZ HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"bajaj-001", insurer:"Bajaj Allianz", product:"Health Guard Gold",
-    tpa:"Bajaj Allianz (In-house)", type:"Individual / Family Floater",
-    sumInsured:[1.5,2,3,4,5,7.5,10,15,20,30,50], premium_indicative:"₹6,500+/yr",
-    networkHospitals:8000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Adenoids":24,"Deviated nasal septum":24,"Knee replacement":48,"Hip replacement":48,"Shoulder replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney / ureteric stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48,"Prolapsed disc":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day for room; 2% for ICU" },
-    subLimits:{ "Cataract (per eye)":25000, "Internal congenital":50000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"3 days prior (planned), 24 hrs (emergency)",
-    highlights:["Wide SI range","Affordable","Room rent 1% SI — KEY RISK for metro hospitals","Knee/hip wait 48 months"],
-    exclusions_specific:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF","Genetic disorder"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Any surgery","Hospitalization last 3 yrs"]
-  },
-  {
-    id:"bajaj-002", insurer:"Bajaj Allianz", product:"Global Health Care",
-    tpa:"Bajaj Allianz (In-house)", type:"Individual / Family Floater",
-    sumInsured:[50,100,200,500,750,1000], premium_indicative:"₹35,000+/yr",
-    networkHospitals:8000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:100000, cSection:150000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["International cover","High SI","No sublimits","Maternity included"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","Self-inflicted","War","IVF"],
-    disclosureRequired:["All chronic conditions","All surgeries","All hospitalizations","Current medications"]
-  },
-  {
-    id:"bajaj-003", insurer:"Bajaj Allianz", product:"Health Infinity",
-    tpa:"Bajaj Allianz (In-house)", type:"Individual / Family Floater",
-    sumInsured:[100,200,300,500,750,1000], premium_indicative:"₹28,000+/yr",
-    networkHospitals:8000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:100000, cSection:150000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["Unlimited renewals","No copay","Super top-up compatible","Premium plan"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["All chronic conditions mandatory","All surgeries","All hospitalizations"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // ADITYA BIRLA HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"abhi-001", insurer:"Aditya Birla Health Insurance", product:"Activ One",
-    tpa:"Aditya Birla (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,10,15,20,30,50,100], premium_indicative:"₹9,800+/yr",
-    networkHospitals:11000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Adenoids":12,"Deviated nasal septum":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Endometriosis":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney / ureteric stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36,"Prolapsed disc":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"HealthReturns — earn back premium via fitness activity",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"Pre-auth via app — 24 hrs prior",
-    highlights:["HealthReturns wellness incentive","36-month PED wait","No sublimits","Fast 15-day settlement"],
-    exclusions_specific:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Neuro","Respiratory","Surgery","Hospitalization last 5 yrs"]
-  },
-  {
-    id:"abhi-002", insurer:"Aditya Birla Health Insurance", product:"Activ Assure Diamond",
-    tpa:"Aditya Birla (In-house)", type:"Individual / Family Floater",
-    sumInsured:[2,3,4,5,7,10,15,20,25,50,100], premium_indicative:"₹7,200+/yr",
-    networkHospitals:11000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"10% per year up to 50% — Cumulative Bonus Booster",
-    reimbursementTimeline:"21 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["HealthReturns benefit","No room rent cap","11k+ hospitals"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"abhi-003", insurer:"Aditya Birla Health Insurance", product:"Activ Health Platinum Enhanced",
-    tpa:"Aditya Birla (In-house)", type:"Individual / Family Floater",
-    sumInsured:[2,3,4,5,10,15,20,25,50,100], premium_indicative:"₹8,500+/yr",
-    networkHospitals:11000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"Chronic Management Program benefit",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"24 hrs prior",
-    highlights:["Chronic disease management benefit","HealthReturns","Shorter PED wait"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery / hospitalization"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // TATA AIG HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"tataaig-001", insurer:"Tata AIG", product:"Medicare Premier",
-    tpa:"Tata AIG (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,10,15,20,25,50,100,150,200], premium_indicative:"₹9,500+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Adenoids":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney / ureteric stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 150%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No sublimits","Strong NCB up to 150%","No room rent cap","Maternity included"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Liver","Thyroid","Surgery / hospitalization"]
-  },
-  {
-    id:"tataaig-002", insurer:"Tata AIG", product:"Medicare",
-    tpa:"Tata AIG (In-house)", type:"Individual / Family Floater",
-    sumInsured:[2,3,5,7,10,15,20,25,50], premium_indicative:"₹6,500+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No room rent cap","10k+ hospitals","Trusted brand"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"tataaig-003", insurer:"Tata AIG", product:"MediCare Protect",
-    tpa:"Tata AIG (In-house)", type:"Super Top-Up",
-    sumInsured:[5,10,15,20,25,50], premium_indicative:"₹2,800+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Super top-up","Low premium","Good for topping existing corporate cover"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // RELIANCE HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"reliance-001", insurer:"Reliance Health Insurance", product:"Health Gain",
-    tpa:"Reliance Health (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,7,10,15,20], premium_indicative:"₹7,200+/yr",
-    networkHospitals:8500,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":12,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Adenoids":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney / ureteric stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent cap" },
-    subLimits:{ "Cataract (per eye)":30000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No room rent cap","Short specific illness waits","Restoration benefit"],
-    exclusions_specific:["Cosmetic","Dental","HIV","Obesity","Experimental","War","Self-harm","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Any surgery","Hospitalization last 3 yrs"]
-  },
-  {
-    id:"reliance-002", insurer:"Reliance Health Insurance", product:"Health Infinity",
-    tpa:"Reliance Health (In-house)", type:"Individual / Family Floater",
-    sumInsured:[10,15,20,30,50,100], premium_indicative:"₹12,000+/yr",
-    networkHospitals:8500,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"15% per year up to 75%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No sublimits","Maternity included","Strong NCB","Shorter PED wait"],
-    exclusions_specific:["Cosmetic","Dental","HIV","Obesity","Experimental","War","Self-harm","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Liver","Thyroid","Surgery / hospitalization"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // SBI HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"sbi-001", insurer:"SBI Health Insurance", product:"Arogya Supreme",
-    tpa:"Medi Assist", type:"Individual / Family Floater",
-    sumInsured:[3,5,10,15,20,25,50], premium_indicative:"₹7,000+/yr",
-    networkHospitals:6000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":35000 },
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:25000, cSection:40000 },
-    daycare:true, restoration:true, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Backed by SBI brand","Restoration benefit","Maternity included"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"sbi-002", insurer:"SBI Health Insurance", product:"Arogya Premier",
-    tpa:"Medi Assist", type:"Individual / Family Floater",
-    sumInsured:[10,15,20,30,50,100], premium_indicative:"₹12,500+/yr",
-    networkHospitals:6000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:75000, cSection:100000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Premium plan","No sublimits","Shorter PED wait","Strong maternity"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Liver","Thyroid","Surgery / hospitalization"]
-  },
-  {
-    id:"sbi-003", insurer:"SBI Health Insurance", product:"Arogya Plus",
-    tpa:"Medi Assist", type:"Individual / Family Floater",
-    sumInsured:[1,2,3,4,5], premium_indicative:"₹3,500+/yr",
-    networkHospitals:6000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Knee replacement":48,"Hip replacement":48,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"fixed", limit:5000, icu:7500, note:"₹5000/day room — metro hospital risk" },
-    subLimits:{ "Cataract (per eye)":20000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Entry level","SBI brand","Fixed room rent — KEY RISK in metro cities"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 3 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // MANIPAL CIGNA HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"manipalcigna-001", insurer:"ManipalCigna Health Insurance", product:"ProHealth Plus",
-    tpa:"ManipalCigna (In-house)", type:"Individual / Family Floater",
-    sumInsured:[2.5,4.5,7.5,10,15,20,25], premium_indicative:"₹7,500+/yr",
-    networkHospitals:8500,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:25000, cSection:50000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 100%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No room rent cap","Maternity included","Strong NCB"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"manipalcigna-002", insurer:"ManipalCigna Health Insurance", product:"ProHealth Protect",
-    tpa:"ManipalCigna (In-house)", type:"Individual / Family Floater",
-    sumInsured:[2.5,3.5,5.5,6.5,7.5,10,15], premium_indicative:"₹5,500+/yr",
-    networkHospitals:8500,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day" },
-    subLimits:{ "Cataract (per eye)":25000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Affordable","Room rent 1% SI — risk","Entry level"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"manipalcigna-003", insurer:"ManipalCigna Health Insurance", product:"Lifestyle Protection Critical Care",
-    tpa:"ManipalCigna (In-house)", type:"Individual",
-    sumInsured:[1,2,3,4,5,10,15,20,25], premium_indicative:"₹4,000+/yr",
-    networkHospitals:8500,
-    waitingPeriods:{ initial:90, ped:48,
-      specificIllness:{ "Heart attack":90,"Stroke":90,"Cancer":90,"Kidney failure":90,"Bypass surgery":90,"Major organ transplant":90 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"lump_sum", limit:null, note:"Lump sum payout — no hospitalization required" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:false, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"N/A — lump sum payout", cashlessPreAuth:"N/A — lump sum on diagnosis",
-    highlights:["Lump sum on critical illness diagnosis","No hospitalization needed for payout","20 critical illnesses covered"],
-    exclusions_specific:["Pre-existing critical illness","HIV-related cancer","Self-inflicted","War","Congenital"],
-    disclosureRequired:["All critical illness history","All chronic conditions","All hospitalizations"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // ORIENTAL INSURANCE (PSU)
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"oriental-001", insurer:"Oriental Insurance", product:"Happy Family Floater",
-    tpa:"Medi Assist / Oriental TPA", type:"Family Floater",
-    sumInsured:[1,2,3,4,5,6,7,8,9,10,12,15,20], premium_indicative:"₹5,800+/yr",
-    networkHospitals:6000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Adenoids":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney / ureteric stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48,"Prolapsed disc":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"fixed", limit:5000, icu:10000, note:"₹5000/day room; ₹10000/day ICU — MAJOR RISK in metros" },
-    subLimits:{ "Cataract (per eye)":20000, "Internal prosthesis":50000 },
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:15000, cSection:25000 },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-45 days", cashlessPreAuth:"48 hrs prior — PSU process, slower",
-    highlights:["PSU insurer — government backed","Fixed room rent ₹5000/day — CRITICAL RISK for metro hospitals","PSU settlement slower"],
-    exclusions_specific:["Cosmetic","Dental (non-accident)","Obesity","Experimental","HIV","War","Self-harm","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-  {
-    id:"oriental-002", insurer:"Oriental Insurance", product:"Individual Mediclaim",
-    tpa:"Medi Assist / Oriental TPA", type:"Individual",
-    sumInsured:[1,2,3,4,5,6,7,8,9,10], premium_indicative:"₹4,500+/yr",
-    networkHospitals:6000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day — RISK" },
-    subLimits:{ "Cataract (per eye)":15000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-45 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["PSU insurer","Basic individual cover","Room rent 1% SI — risk","Slow settlement"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // NEW INDIA ASSURANCE (PSU)
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"newindia-001", insurer:"New India Assurance", product:"New India Floater Mediclaim",
-    tpa:"Vipul Medcorp / New India TPA", type:"Individual / Family Floater",
-    sumInsured:[2,3,5,8,10,15], premium_indicative:"₹5,200+/yr",
-    networkHospitals:7500,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":12,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":12,"Tonsillitis":12,"Adenoids":12,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney / ureteric stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day — sub-limit risk" },
-    subLimits:{ "Cataract (per eye)":20000 },
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:15000, cSection:25000 },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-45 days", cashlessPreAuth:"48 hrs — Vipul Medcorp TPA",
-    highlights:["Government insurer","Cataract wait only 12 months","Room rent 1% SI — RISK","Settlement can be slow"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","HIV","War","Self-harm","IVF","Experimental","Genetic"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery","Hospitalization last 3 yrs"]
-  },
-  {
-    id:"newindia-002", insurer:"New India Assurance", product:"New India Asha Kiran (Women)",
-    tpa:"Vipul Medcorp / New India TPA", type:"Individual (Women)",
-    sumInsured:[1,2,3,5,10,15], premium_indicative:"₹4,500+/yr",
-    networkHospitals:7500,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":12,"Hernia":24,"Fibroid uterus":12,"Endometriosis":12,"Polycystic ovarian disease":12,"Cervical cancer":36,"Breast cancer":36,"Piles":12,"Sinusitis":12,"Gall bladder stones":12,"Kidney stones":12 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day" },
-    subLimits:{ "Cataract (per eye)":15000, "Maternity":25000 },
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:15000, cSection:20000 },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-45 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Women-specific","Short PCOS/fibroid wait","Government insurer","Room rent risk"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","HIV","War","Self-harm","IVF","Experimental"],
-    disclosureRequired:["Diabetes","Hypertension","Cancer history","Gynaecological conditions","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // UNITED INDIA INSURANCE (PSU)
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"uii-001", insurer:"United India Insurance", product:"United Individual Health Insurance",
-    tpa:"Medi Assist / United India TPA", type:"Individual",
-    sumInsured:[1,2,3,4,5,6,7,8,9,10], premium_indicative:"₹4,500+/yr",
-    networkHospitals:7000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney / ureteric stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI/day — room rent RISK" },
-    subLimits:{ "Cataract (per eye)":15000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-60 days", cashlessPreAuth:"3 days prior — document heavy",
-    highlights:["Lowest premium","PSU backed","Room rent 1% SI — RISK","Slow settlement","Limited network"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","HIV","War","Self-harm","IVF","Experimental"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery","Hospitalization last 3 yrs"]
-  },
-  {
-    id:"uii-002", insurer:"United India Insurance", product:"United Family Medicare",
-    tpa:"Medi Assist / United India TPA", type:"Family Floater",
-    sumInsured:[3,5,10,15,20], premium_indicative:"₹6,000+/yr",
-    networkHospitals:7000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day" },
-    subLimits:{ "Cataract (per eye)":15000 },
-    maternity:{ covered:true, waitingPeriod:36, normalDelivery:10000, cSection:15000 },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-60 days", cashlessPreAuth:"3 days prior",
-    highlights:["PSU family floater","Government backed","Room rent risk","Slow settlement"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","HIV","War","Self-harm","IVF","Experimental"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // NATIONAL INSURANCE (PSU)
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"national-001", insurer:"National Insurance", product:"National Mediclaim Plus",
-    tpa:"Vipul Medcorp / National TPA", type:"Individual / Family",
-    sumInsured:[1,2,3,5,10,15,20], premium_indicative:"₹4,800+/yr",
-    networkHospitals:6500,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day" },
-    subLimits:{ "Cataract (per eye)":15000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-60 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["PSU insurer","Government backed","Room rent 1% SI — RISK","Slow TPA settlement"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","War","Self-harm","IVF"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"national-002", insurer:"National Insurance", product:"National Parivar Mediclaim Plus",
-    tpa:"Vipul Medcorp / National TPA", type:"Family Floater",
-    sumInsured:[2,3,5,10,15,20], premium_indicative:"₹5,800+/yr",
-    networkHospitals:6500,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"fixed", limit:5000, icu:10000, note:"₹5000/day — RISK in metros" },
-    subLimits:{ "Cataract (per eye)":15000 },
-    maternity:{ covered:true, waitingPeriod:36, normalDelivery:10000, cSection:15000 },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30-60 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["PSU family floater","Fixed room rent — RISK","Slow settlement"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","HIV","War","Self-harm","IVF","Experimental"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // ROYAL SUNDARAM HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"royalsundaram-001", insurer:"Royal Sundaram", product:"Lifeline Supreme",
-    tpa:"Royal Sundaram (In-house)", type:"Individual / Family Floater",
-    sumInsured:[4,5,7,10,15,20,25,50,100], premium_indicative:"₹8,000+/yr",
-    networkHospitals:7000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":12,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:36, normalDelivery:30000, cSection:50000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 100%",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No sublimits","36-month PED wait","No room rent cap","15-day settlement"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Liver","Thyroid","Surgery / hospitalization"]
-  },
-  {
-    id:"royalsundaram-002", insurer:"Royal Sundaram", product:"Lifeline Classic",
-    tpa:"Royal Sundaram (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,4,5,7,10,15,20], premium_indicative:"₹6,500+/yr",
-    networkHospitals:7000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":35000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No room rent cap","Fast settlement","Good value"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // IFFCO TOKIO HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"iffco-001", insurer:"IFFCO Tokio", product:"Individual Medishield",
-    tpa:"IFFCO Tokio TPA / Medi Assist", type:"Individual / Family",
-    sumInsured:[1,2,3,4,5,7,10,15,20], premium_indicative:"₹5,200+/yr",
-    networkHospitals:5000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney stones":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day" },
-    subLimits:{ "Cataract (per eye)":20000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Entry-level pricing","Room rent 1% SI — risk","Limited network"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"iffco-002", insurer:"IFFCO Tokio", product:"Family Health Protector",
-    tpa:"IFFCO Tokio TPA / Medi Assist", type:"Family Floater",
-    sumInsured:[2,3,4,5,7,10,15,20], premium_indicative:"₹6,500+/yr",
-    networkHospitals:5000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"percent_si", limit:1, icu:2, note:"1% of SI per day" },
-    subLimits:{ "Cataract (per eye)":20000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Family floater","Room rent 1% SI — risk","Limited network"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // CHOLAMANDALAM MS HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"chola-001", insurer:"Cholamandalam MS", product:"Flexi Health",
-    tpa:"Medi Assist / Chola TPA", type:"Individual / Family Floater",
-    sumInsured:[3,4,5,7.5,10,15,20,25,50], premium_indicative:"₹7,000+/yr",
-    networkHospitals:8000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":12,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":30000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No room rent cap","Good value","Modular benefit add-ons"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // LIBERTY HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"liberty-001", insurer:"Liberty General Insurance", product:"Health Connect Supra",
-    tpa:"Liberty TPA / Medi Assist", type:"Super Top-Up",
-    sumInsured:[5,10,15,20,25,30,50,100], premium_indicative:"₹3,000+/yr",
-    networkHospitals:6000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Super top-up — good to pair with corporate cover","No sublimits","Affordable"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // DIGIT HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"digit-001", insurer:"Go Digit General Insurance", product:"Health Insurance",
-    tpa:"Digit (In-house)", type:"Individual / Family Floater",
-    sumInsured:[2,3,5,10,15,20,25,50,100], premium_indicative:"₹6,500+/yr",
-    networkHospitals:6400,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"Digit app — digital pre-auth",
-    highlights:["Digital-first experience","No room rent cap","Digital pre-auth","Growing network"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // ACKO HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"acko-001", insurer:"Acko General Insurance", product:"Acko Health Insurance",
-    tpa:"Acko (In-house)", type:"Individual / Family Floater",
-    sumInsured:[5,10,15,20,25,50,100], premium_indicative:"₹7,000+/yr",
-    networkHospitals:7000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:12, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"Acko app — instant pre-auth",
-    highlights:["Fully digital","Instant pre-auth via app","No sublimits","Fast settlement"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // FUTURE GENERALI HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"futuregenerali-001", insurer:"Future Generali India Insurance", product:"Health Total",
-    tpa:"Medi Assist / Future Generali TPA", type:"Individual / Family Floater",
-    sumInsured:[3,5,7.5,10,15,20,25], premium_indicative:"₹6,800+/yr",
-    networkHospitals:6300,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":35000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"10% per year up to 100%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No room rent cap","Strong NCB","Restoration benefit"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // KOTAK MAHINDRA HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"kotak-001", insurer:"Kotak Mahindra General Insurance", product:"Health Shield",
-    tpa:"Medi Assist / Kotak TPA", type:"Individual / Family Floater",
-    sumInsured:[3,5,10,15,20,25,50,100], premium_indicative:"₹7,500+/yr",
-    networkHospitals:7000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":40000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:true, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Kotak brand backing","No room rent cap","Restoration included"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // EDELWEISS HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"edelweiss-001", insurer:"Edelweiss General Insurance", product:"Health Apex",
-    tpa:"Medi Assist / Edelweiss TPA", type:"Individual / Family Floater",
-    sumInsured:[3,5,7.5,10,15,20,25,50,100], premium_indicative:"₹7,800+/yr",
-    networkHospitals:7000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Piles / Haemorrhoids":12,"Sinusitis":12,"Tonsillitis":12,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Polycystic ovarian disease":12,"Benign prostatic hypertrophy":12,"Diabetes (complications)":36,"Hypertension (complications)":36,"Psychiatric illness":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:true, ncb:"10% per year up to 100%",
-    reimbursementTimeline:"21 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["36-month PED wait","No sublimits","Maternity included","Short specific illness waits"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Liver","Thyroid","Surgery / hospitalization"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // MAGMA HDI HEALTH INSURANCE
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"magma-001", insurer:"Magma HDI General Insurance", product:"One Health",
-    tpa:"Medi Assist / Magma TPA", type:"Individual / Family Floater",
-    sumInsured:[3,5,10,15,20,25,50], premium_indicative:"₹6,800+/yr",
-    networkHospitals:6000,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":35000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["No room rent cap","Flexible plan","Growing network"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // STANDARD AROGYA CARE (UNIVERSAL HEALTH COVERAGE)
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"arogya-sanjeevani-001", insurer:"All Insurers (IRDA Mandate)", product:"Arogya Sanjeevani Policy",
-    tpa:"Respective Insurer TPA", type:"Individual / Family Floater (Standard)",
-    sumInsured:[1,1.5,2,2.5,3,3.5,4,4.5,5], premium_indicative:"₹3,500+/yr",
-    networkHospitals: 0,
-    waitingPeriods:{ initial:30, ped:48,
-      specificIllness:{ "Cataract":24,"Hernia (all types)":24,"Hydrocele":24,"Fistula in ano":24,"Piles / Haemorrhoids":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Calculus diseases":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":48,"Hypertension (complications)":48,"Psychiatric illness":48 }
-    },
-    copay:{ applicable:true, percent:5, ped_copay:5 },
-    deductible:0, roomRent:{ type:"percent_si", limit:2, icu:5, note:"2% of SI/day room (max ₹5000); 5% ICU" },
-    subLimits:{ "Cataract (per eye)":40000, "Modern treatment":50000 },
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"Varies by insurer",
-    highlights:["IRDA-mandated standard product","Available from all general + standalone health insurers","5% copay on all claims","Comparable features across insurers","Max SI ₹5 lakh"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // HDFC ERGO / APOLLO MUNICH LEGACY
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"hdfc-apollo-001", insurer:"HDFC Ergo (formerly Apollo Munich)", product:"Energy (Diabetes / Hypertension plan)",
-    tpa:"HDFC Ergo (In-house)", type:"Individual (Diabetic / Hypertensive)",
-    sumInsured:[2,3,5,10,15,20], premium_indicative:"₹12,000+/yr",
-    networkHospitals:13000,
-    waitingPeriods:{ initial:30, ped:0,
-      specificIllness:{ "Diabetes complications":0,"Hypertension complications":0,"Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["Covers diabetics / hypertensives from day 1","No PED wait for diabetes / BP","OPD benefit","Annual HbA1c / BP monitoring"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Full diabetes / hypertension history mandatory","Duration of condition","Current HbA1c / BP readings","All medications","All complications"]
-  },
-  {
-    id:"hdfc-apollo-002", insurer:"HDFC Ergo (formerly Apollo Munich)", product:"Maxima",
-    tpa:"HDFC Ergo (In-house)", type:"Individual / Family Floater",
-    sumInsured:[3,5,10,15,20,25,50], premium_indicative:"₹8,500+/yr",
-    networkHospitals:13000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Piles":24,"Sinusitis":24,"Tonsillitis":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Polycystic ovarian disease":24,"Benign prostatic hypertrophy":24,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{ "Cataract (per eye)":60000 },
-    maternity:{ covered:true, waitingPeriod:24, normalDelivery:40000, cSection:60000 },
-    daycare:true, restoration:true, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["Apollo Munich heritage","Maternity included","No room rent cap","Strong network"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Thyroid","Surgery / hospitalization"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // SUPER TOP-UP PRODUCTS (MAJOR ONES)
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"star-supertopup-001", insurer:"Star Health", product:"Star Super Surplus Insurance",
-    tpa:"Star Health (In-house)", type:"Super Top-Up",
-    sumInsured:[5,10,15,20,25,40,50], premium_indicative:"₹3,500+/yr",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:30, ped:24,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":24,"Hypertension (complications)":24 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"4 hrs prior",
-    highlights:["Ideal to pair with corporate cover","Lower PED wait","Affordable","No sublimits"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"hdfc-supertopup-001", insurer:"HDFC Ergo", product:"Extra Care Plus (Super Top-Up)",
-    tpa:"HDFC Ergo (In-house)", type:"Super Top-Up",
-    sumInsured:[5,10,15,20,25,50,100], premium_indicative:"₹2,800+/yr",
-    networkHospitals:13000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 50%",
-    reimbursementTimeline:"30 days", cashlessPreAuth:"72 hrs prior",
-    highlights:["Good super top-up option","No sublimits","Affordable to layer on corporate cover"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"care-supertopup-001", insurer:"Care Health Insurance", product:"Care Super Top-Up",
-    tpa:"Care Health (In-house)", type:"Super Top-Up",
-    sumInsured:[10,15,20,30,40,50,100], premium_indicative:"₹2,500+/yr",
-    networkHospitals:19000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":12,"Hernia":12,"Knee replacement":24,"Hip replacement":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"10% per year up to 50%",
-    reimbursementTimeline:"21 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Largest network for a super top-up","Short specific illness waits","Affordable layering"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-  {
-    id:"nivabupa-supertopup-001", insurer:"Niva Bupa", product:"Health Recharge (Super Top-Up)",
-    tpa:"Niva Bupa (In-house)", type:"Super Top-Up",
-    sumInsured:[5,10,15,20,25,50], premium_indicative:"₹3,000+/yr",
-    networkHospitals:10000,
-    waitingPeriods:{ initial:30, ped:36,
-      specificIllness:{ "Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes (complications)":36,"Hypertension (complications)":36 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No room rent sub-limit" },
-    subLimits:{},
-    maternity:{ covered:false, waitingPeriod:null },
-    daycare:true, restoration:false, ncb:"5% per year up to 25%",
-    reimbursementTimeline:"15 days", cashlessPreAuth:"48 hrs prior",
-    highlights:["Fast 15-day settlement","No sublimits","Short PED wait for super top-up"],
-    exclusions_specific:["Cosmetic","Dental","Obesity","Experimental","HIV","IVF","Self-inflicted","War"],
-    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Surgery last 5 yrs"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // GROUP / CORPORATE REFERENCE PRODUCTS
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"star-group-001", insurer:"Star Health", product:"Star Group Health Insurance",
-    tpa:"Star Health (In-house)", type:"Group / Corporate",
-    sumInsured:[1,2,3,5,10,15,20,25,50], premium_indicative:"Varies by group size",
-    networkHospitals:14000,
-    waitingPeriods:{ initial:0, ped:0,
-      specificIllness:{ "Cataract":0,"Hernia":0,"Knee replacement":0,"Diabetes complications":0,"Hypertension complications":0 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"Usually no cap — employer may customize" },
-    subLimits:{},
-    maternity:{ covered:true, waitingPeriod:0, normalDelivery:50000, cSection:75000 },
-    daycare:true, restoration:false, ncb:"Not applicable",
-    reimbursementTimeline:"15-30 days", cashlessPreAuth:"Pre-auth 4 hrs or immediate",
-    highlights:["NO waiting periods","NO PED exclusions","All conditions covered from day 1","Leaves on resignation / retirement — convert to individual WITHIN 30 DAYS"],
-    exclusions_specific:["Cosmetic","Dental (optional)","Self-inflicted","War"],
-    disclosureRequired:["None — group cover requires no individual declaration","Note: converting to individual at policy end requires fresh declaration"]
-  },
-
-  // ═══════════════════════════════════════════════════════════
-  // PMJAY / AYUSHMAN BHARAT (REFERENCE)
-  // ═══════════════════════════════════════════════════════════
-  {
-    id:"pmjay-001", insurer:"Government of India / NHA", product:"Pradhan Mantri Jan Arogya Yojana (PMJAY / Ayushman Bharat)",
-    tpa:"National Health Authority (NHA)", type:"Government Scheme (BPL / eligible families)",
-    sumInsured:[5], premium_indicative:"₹0 (government funded)",
-    networkHospitals:25000,
-    waitingPeriods:{ initial:0, ped:0,
-      specificIllness:{ "All conditions":0 }
-    },
-    copay:{ applicable:false, percent:0, ped_copay:0 },
-    deductible:0, roomRent:{ type:"any", limit:null, icu:null, note:"No cap — secondary / tertiary care covered" },
-    subLimits:{ "Dental (limited)":5000 },
-    maternity:{ covered:true, waitingPeriod:0, normalDelivery:9000, cSection:9000 },
-    daycare:true, restoration:false, ncb:"Not applicable",
-    reimbursementTimeline:"Government process", cashlessPreAuth:"Empanelled hospital — e-card based",
-    highlights:["₹5 lakh cover per family per year — FREE","No waiting periods","No PED exclusions","1578+ treatment packages","PMJAY card required","Eligible: BPL families and SECC 2011 database"],
-    exclusions_specific:["OPD","Cosmetic","Self-inflicted","Fertility / IVF","Experimental","Drug abuse"],
-    disclosureRequired:["PMJAY / Ayushman card required","No medical declaration needed"]
+    id:"united-india-011",insurer:"United India Insurance",product:"United Health Individual",tpa:"Medi Assist / United TPA",type:"Individual",sumInsured:[1,2,3,4,5,6,7,8,9,10],premium_base:4500,networkHospitals:7000,
+    waitingPeriods:{initial:30,ped:48,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":48,"Hip replacement":48,"Varicose veins":24,"Piles / Fissures":24,"Sinusitis":24,"Tonsillitis":24,"Fibroid uterus":24,"Gall bladder stones":24,"Kidney stones":24,"Diabetes complications":48,"Hypertension complications":48,"Psychiatric illness":48,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":24}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"percent_si",limit:1,note:"1% of SI/day room — risk"},
+    subLimits:{"Cataract per eye":15000},maternity:{covered:false,waitingPeriod:null,sublimit:null},restoration:false,daycare:true,
+    exclusions:["Cosmetic","Dental","Obesity","HIV","War","Self-harm","IVF","Experimental"],
+    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Any surgery","Any hospitalization last 3 years"],
+    cashlessProcess:"Pre-auth 3 days prior. PSU — document heavy.",reimbursementTimeline:"30-60 days",ncb:"5% per year up to 25%",
+    highlights:["Lowest premium","PSU backed","Limited network","Room rent sub-limit risk"]
+  },
+  {
+    id:"reliance-healthgain-012",insurer:"Reliance Health Insurance",product:"Health Gain",tpa:"Reliance Health TPA",type:"Individual / Floater",sumInsured:[3,5,7,10,15,20],premium_base:7200,networkHospitals:8500,
+    waitingPeriods:{initial:30,ped:48,specificIllness:{"Cataract":24,"Hernia":24,"Knee replacement":24,"Hip replacement":24,"Varicose veins":12,"Piles / Fissures":12,"Sinusitis":12,"Tonsillitis":12,"Fibroid uterus":24,"Gall bladder stones":12,"Kidney stones":12,"Diabetes complications":48,"Hypertension complications":48,"Psychiatric illness":36,"Benign prostatic hypertrophy":24,"Polycystic ovarian disease":12}},
+    copay:{applicable:false,percent:0,ped_copay:0},roomRent:{type:"any",limit:null,note:"No room rent cap"},
+    subLimits:{"Cataract per eye":30000},maternity:{covered:false,waitingPeriod:null,sublimit:null},restoration:true,daycare:true,
+    exclusions:["Cosmetic","Dental","HIV","Obesity","Experimental","War","Self-harm","IVF"],
+    disclosureRequired:["Diabetes","Hypertension","Heart","Cancer","Kidney","Any surgery","Hospitalization last 3 years"],
+    cashlessProcess:"Pre-auth 48 hrs prior. Reliance TPA.",reimbursementTimeline:"30 days",ncb:"10% per year up to 50%",
+    highlights:["No room rent cap","Short specific illness waits","Good restoration benefit"]
   },
 ];
-
 
 const IRDA_EXCLUSIONS = [
   {code:"E01",name:"Pre-existing diseases",desc:"Conditions existing before policy inception — covered after waiting period (1–4 years depending on policy)"},
@@ -1756,7 +497,7 @@ function matchConditions(query) {
   }
   if (matched.size === 0) {
     // fuzzy: check all illness keys
-    for (const p of FULL_POLICY_DB) {
+    for (const p of POLICY_DB) {
       for (const k of Object.keys(p.waitingPeriods.specificIllness)) {
         if (q.includes(k.toLowerCase().split(" ")[0])) matched.add(k);
       }
@@ -1766,7 +507,7 @@ function matchConditions(query) {
 }
 
 function compareForCondition(conditions) {
-  return FULL_POLICY_DB.map(p => {
+  return POLICY_DB.map(p => {
     const waits = conditions.map(c => ({ condition: c, months: getWaitingMonths(p, c) }));
     const maxWait = Math.max(...waits.map(w => w.months ?? 48));
     const pedWait = p.waitingPeriods.ped;
@@ -1826,11 +567,10 @@ Return ONLY valid JSON with this exact structure:
         {type:"text",text:"Analyze the policy document and prescription. Return JSON only, no markdown."}
       ];
       const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json","x-api-key":"YOUR_SK_ANT_KEY_HERE","anthropic-version":"2023-06-01","anthropic-beta":"pdfs-2024-09-25"},
+        method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-beta":"pdfs-2024-09-25"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:sys,messages:[{role:"user",content}]})
       });
       const data = await res.json();
-      if (!data || !data.content) throw new Error((data && data.error && data.error.message) || JSON.stringify(data) || "API error");
       const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
       setResult(JSON.parse(raw));
     } catch(e) { setError("Analysis failed: "+e.message); }
@@ -2015,7 +755,7 @@ function Module_PolicyComparison() {
       const custom = [query.trim()];
       setResults({ conditions: custom, ranked: compareForCondition(custom) });
     } else {
-      const conds = conditions.length > 0 ? conditions : Object.keys(FULL_POLICY_DB[0].waitingPeriods.specificIllness).slice(0,3);
+      const conds = conditions.length > 0 ? conditions : Object.keys(POLICY_DB[0].waitingPeriods.specificIllness).slice(0,3);
       setResults({ conditions: conds, ranked: compareForCondition(conds) });
     }
   };
@@ -2048,7 +788,7 @@ function Module_PolicyComparison() {
           <div className="card" style={{marginBottom:16}}>
             <div className="card-title">Analyzing for: {results.conditions.join(", ")}</div>
             <div className="summary-grid">
-              <div className="stat-box"><div className="stat-label">Policies analyzed</div><div className="stat-val">{FULL_POLICY_DB.length}</div></div>
+              <div className="stat-box"><div className="stat-label">Policies analyzed</div><div className="stat-val">{POLICY_DB.length}</div></div>
               <div className="stat-box"><div className="stat-label">Cover immediately</div><div className="stat-val" style={{color:"#2d7a4f"}}>{results.ranked.filter(r=>r.maxWait===0||(policyAge&&parseInt(policyAge)>=(r.maxWait||0))).length}</div></div>
               <div className="stat-box"><div className="stat-label">Shortest wait</div><div className="stat-val">{Math.min(...results.ranked.map(r=>r.maxWait))} mo</div></div>
               <div className="stat-box"><div className="stat-label">Longest wait</div><div className="stat-val">{Math.max(...results.ranked.map(r=>r.maxWait))} mo</div></div>
@@ -2316,12 +1056,11 @@ function Module_TPALookup() {
 Return ONLY valid JSON.`;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json","x-api-key":"YOUR_SK_ANT_KEY_HERE","anthropic-version":"2023-06-01","anthropic-beta":"pdfs-2024-09-25"},
+        method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-beta":"pdfs-2024-09-25"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:sys,
           messages:[{role:"user",content:`TPA: ${selected.name} (${selected.insurer}). Hospital: ${hospital}. Is this hospital likely in-network? Network size: ${selected.network} hospitals across India.`}]})
       });
       const data = await res.json();
-      if (!data || !data.content) throw new Error((data && data.error && data.error.message) || JSON.stringify(data) || "API error");
       const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
       setCheckResult(JSON.parse(raw));
     } catch(e) { setCheckResult({likelyNetwork:"unknown",confidence:"low",note:"Unable to check automatically. Please call the TPA hotline directly.",preAuthSteps:["Call TPA hotline","Confirm hospital empanelment","Proceed with pre-auth"],documentsNeeded:[],claimHotline:selected.hotline}); }
@@ -2429,7 +1168,7 @@ function Module_PolicyDB() {
   const [filter, setFilter] = useState({ped:"",copay:"",roomRent:"",maternity:""});
   const [selected, setSelected] = useState(null);
 
-  const filtered = FULL_POLICY_DB.filter(p => {
+  const filtered = POLICY_DB.filter(p => {
     const s = search.toLowerCase();
     const nameMatch = !s || p.product.toLowerCase().includes(s) || p.insurer.toLowerCase().includes(s);
     const pedMatch = !filter.ped || (filter.ped==="36" ? p.waitingPeriods.ped<=36 : p.waitingPeriods.ped<=48);
@@ -2443,7 +1182,7 @@ function Module_PolicyDB() {
     <div>
       <div className="page-header">
         <h2>Policy Database</h2>
-        <p>Structured database of {FULL_POLICY_DB.length} major Indian health insurance products with granular terms pre-extracted. Filter and compare side-by-side.</p>
+        <p>Structured database of {POLICY_DB.length} major Indian health insurance products with granular terms pre-extracted. Filter and compare side-by-side.</p>
       </div>
 
       <div className="card">
