@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+/api/claudeimport { useState, useRef, useCallback, useEffect } from "react";
 
 const FULL_POLICY_DB = [
 
@@ -1825,8 +1825,8 @@ Return ONLY valid JSON with this exact structure:
         {type: getMedia(rxFile)==="application/pdf"?"document":"image", source:{type:"base64",media_type:getMedia(rxFile),data:rxData}},
         {type:"text",text:"Analyze the policy document and prescription. Return JSON only, no markdown."}
       ];
-      const res = await fetch("/api/claude",{
-        method:"POST",headers:{"Content-Type":"application/json"},
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",headers:{"Content-Type":"application/json","x-api-key":"YOUR_SK_ANT_KEY_HERE","anthropic-version":"2023-06-01","anthropic-beta":"pdfs-2024-09-25"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:sys,messages:[{role:"user",content}]})
       });
       const data = await res.json();
@@ -2315,8 +2315,8 @@ function Module_TPALookup() {
 }
 Return ONLY valid JSON.`;
     try {
-      const res = await fetch("/api/claude",{
-        method:"POST",headers:{"Content-Type":"application/json"},
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",headers:{"Content-Type":"application/json","x-api-key":"YOUR_SK_ANT_KEY_HERE","anthropic-version":"2023-06-01","anthropic-beta":"pdfs-2024-09-25"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:sys,
           messages:[{role:"user",content:`TPA: ${selected.name} (${selected.insurer}). Hospital: ${hospital}. Is this hospital likely in-network? Network size: ${selected.network} hospitals across India.`}]})
       });
