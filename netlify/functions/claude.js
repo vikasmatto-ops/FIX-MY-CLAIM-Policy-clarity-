@@ -12,7 +12,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const body = event.body ? JSON.parse(event.body) : {};
+    const body = event.isBase64Encoded    ? JSON.parse(Buffer.from(event.body, 'base64').toString('utf8'))   : event.body ? JSON.parse(event.body) : {};
     
     const https = require('https');
     const postData = JSON.stringify(body);
