@@ -1,11 +1,4 @@
-const handler = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).end();
-
+exports.handler = async (event) => {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -14,11 +7,15 @@ const handler = async (req, res) => {
       'anthropic-version': '2023-06-01',
       'anthropic-beta': 'pdfs-2024-09-25',
     },
-    body: JSON.stringify(req.body),
+    body: event.body,
   });
-
   const data = await response.json();
-  return res.status(response.status).json(data);
+  return {
+    statusCode: response.status,
+    headers: { 
+      'Access-Control-Allow-Origin': '*', 
+      'Content-Type': 'application/json' 
+    },
+    body: JSON.stringify(data),
+  };
 };
-
-module.exports = handler;
