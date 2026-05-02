@@ -568,7 +568,7 @@ Return ONLY valid JSON with this exact structure:
       ];
       const res = await fetch("/api/claude",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:2000,system:sys,messages:[{role:"user",content}]})
+        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:4000,system:sys,messages:[{role:"user",content}]})
       });
       const data = await res.json();
       if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
