@@ -571,7 +571,7 @@ Return ONLY valid JSON with this exact structure:
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:sys,messages:[{role:"user",content}]})
       });
       const data = await res.json();
-      const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
+      if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
       setResult(JSON.parse(raw));
     } catch(e) { setError("Analysis failed: "+e.message); }
     setLoading(false);
@@ -1061,7 +1061,7 @@ Return ONLY valid JSON.`;
           messages:[{role:"user",content:`TPA: ${selected.name} (${selected.insurer}). Hospital: ${hospital}. Is this hospital likely in-network? Network size: ${selected.network} hospitals across India.`}]})
       });
       const data = await res.json();
-      const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
+      if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
       setCheckResult(JSON.parse(raw));
     } catch(e) { setCheckResult({likelyNetwork:"unknown",confidence:"low",note:"Unable to check automatically. Please call the TPA hotline directly.",preAuthSteps:["Call TPA hotline","Confirm hospital empanelment","Proceed with pre-auth"],documentsNeeded:[],claimHotline:selected.hotline}); }
     setLoadingCheck(false);
