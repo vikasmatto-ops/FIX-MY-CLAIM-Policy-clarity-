@@ -566,7 +566,7 @@ Return ONLY valid JSON with this exact structure:
         {type: getMedia(rxFile)==="application/pdf"?"document":"image", source:{type:"base64",media_type:getMedia(rxFile),data:rxData}},
         {type:"text",text:"Analyze the policy document and prescription. Return JSON only, no markdown."}
       ];
-      const res = await fetch("https://cheerful-pixie-6d993c.netlify.app/.netlify/functions/claude",{
+      const res = await fetch("https://cheerful-pixie-6d993c.netlify.apphttps://cheerful-pixie-6d993c.netlify.app/.netlify/functions/claude",{
         method:"POST",headers:{"Content-Type":"application/json"},mode:"cors",
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:sys,messages:[{role:"user",content}]})
       });
@@ -1055,7 +1055,7 @@ function Module_TPALookup() {
 }
 Return ONLY valid JSON.`;
     try {
-      const res = await fetch("https://cheerful-pixie-6d993c.netlify.app/.netlify/functions/claude",{
+      const res = await fetch("https://cheerful-pixie-6d993c.netlify.apphttps://cheerful-pixie-6d993c.netlify.app/.netlify/functions/claude",{
         method:"POST",headers:{"Content-Type":"application/json"},mode:"cors",
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:sys,
           messages:[{role:"user",content:`TPA: ${selected.name} (${selected.insurer}). Hospital: ${hospital}. Is this hospital likely in-network? Network size: ${selected.network} hospitals across India.`}]})
