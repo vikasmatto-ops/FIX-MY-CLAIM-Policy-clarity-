@@ -480,6 +480,9 @@ tr:hover td { background: #fdf9f4; }
 
 .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
 @media (max-width: 700px) { .summary-grid { grid-template-columns: 1fr 1fr; } .grid-2 { grid-template-columns: 1fr; } }
+
+.reset-btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 8px 16px; background: #f5f3ef; border: 1px solid #e0dbd0; border-radius: 8px; color: #666; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.reset-btn:hover { border-color: #c9a96e; color: #1a1a1a; background: #fdf8ee; }
 `;
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
@@ -496,7 +499,6 @@ function matchConditions(query) {
     if (q.includes(k)) v.forEach(c => matched.add(c));
   }
   if (matched.size === 0) {
-    // fuzzy: check all illness keys
     for (const p of POLICY_DB) {
       for (const k of Object.keys(p.waitingPeriods.specificIllness)) {
         if (q.includes(k.toLowerCase().split(" ")[0])) matched.add(k);
@@ -527,20 +529,56 @@ function Module_PolicyAnalyzer() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
+  // ── Read file as base64 ──
   const readFile = (file, setter) => {
     const reader = new FileReader();
     reader.onload = e => setter(e.target.result.split(",")[1]);
     reader.readAsDataURL(file);
   };
 
-  const handlePolicy = (f) => { setPolicyFile(f); readFile(f, setPolicyData); };
-  const handleRx = (f) => { setRxFile(f); readFile(f, setRxData); };
+  // ── Handlers — clear previous result on every new upload ──
+  const handlePolicy = (f) => {
+    setPolicyFile(f);
+    setPolicyData(null);   // clear old data first
+    setResult(null);
+    setError("");
+    readFile(f, setPolicyData);
+  };
+
+  const handleRx = (f) => {
+    setRxFile(f);
+    setRxData(null);       // clear old data first
+    setResult(null);
+    setError("");
+    readFile(f, setRxData);
+  };
+
+  // ── Full reset ──
+  const resetAll = () => {
+    setPolicyFile(null);
+    setRxFile(null);
+    setPolicyData(null);
+    setRxData(null);
+    setResult(null);
+    setError("");
+  };
 
   const getMedia = (f) => f?.type === "application/pdf" ? "application/pdf" : f?.type || "image/jpeg";
 
   const analyze = async () => {
-    setLoading(true); setError(""); setResult(null);
-    const sys = `You are an expert Indian health insurance policy analyst. Analyze the uploaded policy document and doctor's prescription together.
+    // Guard: make sure files are fully loaded
+    if (!policyData || !rxData) {
+      setError("Please wait a moment for both files to finish loading, then try again.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    const sys = `You are an expert Indian health insurance policy analyst. Analyze ONLY the uploaded policy document and doctor's prescription provided in this specific request.
+
+CRITICAL: Base your analysis entirely on the documents provided NOW. Do not reference or use any information from previous analyses or conversations.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -561,19 +599,47 @@ Return ONLY valid JSON with this exact structure:
 }`;
 
     try {
+      const policyContentType = getMedia(policyFile);
+      const rxContentType = getMedia(rxFile);
+
       const content = [
-        {type: getMedia(policyFile)==="application/pdf"?"document":"image", source:{type:"base64",media_type:getMedia(policyFile),data:policyData}},
-        {type: getMedia(rxFile)==="application/pdf"?"document":"image", source:{type:"base64",media_type:getMedia(rxFile),data:rxData}},
-        {type:"text",text:"Analyze the policy document and prescription. Return JSON only, no markdown."}
+        {
+          type: policyContentType === "application/pdf" ? "document" : "image",
+          source: { type: "base64", media_type: policyContentType, data: policyData }
+        },
+        {
+          type: rxContentType === "application/pdf" ? "document" : "image",
+          source: { type: "base64", media_type: rxContentType, data: rxData }
+        },
+        {
+          type: "text",
+          text: "Analyze ONLY the policy document and prescription uploaded above. Extract all details strictly from these documents. Return JSON only, no markdown."
+        }
       ];
-      const res = await fetch("/api/claude",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:4000,system:sys,messages:[{role:"user",content}]})
+
+      const res = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5",
+          max_tokens: 4000,
+          system: sys,
+          messages: [{ role: "user", content }]
+        })
       });
+
       const data = await res.json();
-      if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
+
+      if (!data.content) {
+        throw new Error(data.error?.message || JSON.stringify(data));
+      }
+
+      const raw = data.content.map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
       setResult(JSON.parse(raw));
-    } catch(e) { setError("Analysis failed: "+e.message); }
+    } catch (e) {
+      setError("Analysis failed: " + e.message);
+    }
+
     setLoading(false);
   };
 
@@ -586,33 +652,70 @@ Return ONLY valid JSON with this exact structure:
 
       <div className="card">
         <div className="card-title">Upload documents</div>
-        <div className="grid-2" style={{gap:16,marginBottom:16}}>
+        <div className="grid-2" style={{ gap: 16, marginBottom: 16 }}>
           <div>
-            <div style={{fontSize:12,fontWeight:500,color:"#666",marginBottom:8}}>Policy Document</div>
-            <div className={`file-drop ${policyFile?"":"" }`} onDrop={e=>{e.preventDefault();handlePolicy(e.dataTransfer.files[0]);}} onDragOver={e=>e.preventDefault()}>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>e.target.files[0]&&handlePolicy(e.target.files[0])} />
+            <div style={{ fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 8 }}>Policy Document</div>
+            <div
+              className="file-drop"
+              onDrop={e => { e.preventDefault(); e.dataTransfer.files[0] && handlePolicy(e.dataTransfer.files[0]); }}
+              onDragOver={e => e.preventDefault()}
+            >
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={e => e.target.files[0] && handlePolicy(e.target.files[0])}
+                // key forces input reset when file is cleared
+                key={policyFile ? policyFile.name : "policy-empty"}
+              />
               <div className="file-drop-icon">📋</div>
-              <div className="file-drop-label">{policyFile?policyFile.name:"Drop PDF or image"}</div>
+              <div className="file-drop-label">{policyFile ? policyFile.name : "Drop PDF or image"}</div>
               <div className="file-drop-sub">Policy schedule, wordings document</div>
               {policyFile && <div className="file-attached">✓ Attached</div>}
             </div>
           </div>
           <div>
-            <div style={{fontSize:12,fontWeight:500,color:"#666",marginBottom:8}}>Doctor's Prescription</div>
-            <div className="file-drop" onDrop={e=>{e.preventDefault();handleRx(e.dataTransfer.files[0]);}} onDragOver={e=>e.preventDefault()}>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e=>e.target.files[0]&&handleRx(e.target.files[0])} />
+            <div style={{ fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 8 }}>Doctor's Prescription</div>
+            <div
+              className="file-drop"
+              onDrop={e => { e.preventDefault(); e.dataTransfer.files[0] && handleRx(e.dataTransfer.files[0]); }}
+              onDragOver={e => e.preventDefault()}
+            >
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={e => e.target.files[0] && handleRx(e.target.files[0])}
+                key={rxFile ? rxFile.name : "rx-empty"}
+              />
               <div className="file-drop-icon">🩺</div>
-              <div className="file-drop-label">{rxFile?rxFile.name:"Drop PDF or image"}</div>
+              <div className="file-drop-label">{rxFile ? rxFile.name : "Drop PDF or image"}</div>
               <div className="file-drop-sub">Diagnosis + treatment plan</div>
               {rxFile && <div className="file-attached">✓ Attached</div>}
             </div>
           </div>
         </div>
-        <button className="btn-primary" disabled={!policyData||!rxData||loading} onClick={analyze}>
-          {loading && <span className="spinner"/>}
-          {loading ? "Analyzing documents…" : "Analyze coverage & claim risk ↗"}
-        </button>
-        {error && <div style={{marginTop:12,padding:"10px 14px",background:"#fff1f1",borderRadius:8,fontSize:13,color:"#9a2020"}}>{error}</div>}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button
+            className="btn-primary"
+            disabled={!policyData || !rxData || loading}
+            onClick={analyze}
+          >
+            {loading && <span className="spinner" />}
+            {loading ? "Analyzing documents…" : "Analyze coverage & claim risk ↗"}
+          </button>
+
+          {(policyFile || rxFile || result) && (
+            <button className="reset-btn" onClick={resetAll}>
+              ↺ Start fresh / new policy
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <div style={{ marginTop: 12, padding: "10px 14px", background: "#fff1f1", borderRadius: 8, fontSize: 13, color: "#9a2020" }}>
+            {error}
+          </div>
+        )}
       </div>
 
       {result && <AnalysisResult result={result} />}
@@ -620,7 +723,7 @@ Return ONLY valid JSON with this exact structure:
   );
 }
 
-function AnalysisResult({result}) {
+function AnalysisResult({ result }) {
   const r = result;
   const verdictClass = r.overallVerdict?.outlook === "favourable" ? "safe" : r.overallVerdict?.outlook === "risky" ? "risky" : "caution";
   return (
@@ -628,18 +731,26 @@ function AnalysisResult({result}) {
       {r.diagnosis && (
         <div className="card">
           <div className="card-title">Extracted from documents</div>
-          <div style={{display:"flex",gap:24}}>
-            <div><div style={{fontSize:11,color:"#999",marginBottom:4}}>DIAGNOSIS</div><div style={{fontSize:14,fontWeight:500}}>{r.diagnosis}</div></div>
-            {r.treatmentPlan && <div><div style={{fontSize:11,color:"#999",marginBottom:4}}>TREATMENT PLAN</div><div style={{fontSize:13,color:"#444"}}>{r.treatmentPlan}</div></div>}
+          <div style={{ display: "flex", gap: 24 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>DIAGNOSIS</div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{r.diagnosis}</div>
+            </div>
+            {r.treatmentPlan && (
+              <div>
+                <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>TREATMENT PLAN</div>
+                <div style={{ fontSize: 13, color: "#444" }}>{r.treatmentPlan}</div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       <div className="card">
         <div className="card-title">Coverage flags</div>
-        {(r.alerts||[]).map((a,i)=>(
+        {(r.alerts || []).map((a, i) => (
           <div key={i} className={`flag-bar ${a.type}`}>
-            <div style={{flex:1}}>
+            <div style={{ flex: 1 }}>
               <div className="flag-label">{a.title}</div>
               <div className="flag-desc">{a.body}</div>
             </div>
@@ -678,12 +789,12 @@ function AnalysisResult({result}) {
             },
             r.subLimitCheck && {
               ok: !r.subLimitCheck.hasSubLimit,
-              label: r.subLimitCheck.hasSubLimit ? `Sub-limit: ₹${(r.subLimitCheck.limit||0).toLocaleString()}` : "No sub-limits apply",
+              label: r.subLimitCheck.hasSubLimit ? `Sub-limit: ₹${(r.subLimitCheck.limit || 0).toLocaleString()}` : "No sub-limits apply",
               note: r.subLimitCheck.note
             },
-          ].filter(Boolean).map((item,i)=>(
+          ].filter(Boolean).map((item, i) => (
             <div key={i} className="check-row">
-              <div className={`check-circle ${item.ok?"yes":"no"}`}>{item.ok?"✓":"!"}</div>
+              <div className={`check-circle ${item.ok ? "yes" : "no"}`}>{item.ok ? "✓" : "!"}</div>
               <div>
                 <div className="check-label">{item.label}</div>
                 {item.note && <div className="check-note">{item.note}</div>}
@@ -694,33 +805,35 @@ function AnalysisResult({result}) {
 
         <div className="card">
           <div className="card-title">Non-disclosure assessment</div>
-          <div className={`badge ${r.nonDisclosure?.risk==="high"?"badge-red":r.nonDisclosure?.risk==="medium"?"badge-amber":"badge-green"}`} style={{marginBottom:10}}>
+          <div className={`badge ${r.nonDisclosure?.risk === "high" ? "badge-red" : r.nonDisclosure?.risk === "medium" ? "badge-amber" : "badge-green"}`} style={{ marginBottom: 10 }}>
             {r.nonDisclosure?.risk === "high" ? "High risk" : r.nonDisclosure?.risk === "medium" ? "Medium risk" : "Low risk"}
           </div>
-          {(r.nonDisclosure?.conditions||[]).length > 0 && (
-            <div style={{marginBottom:8}}>
-              {r.nonDisclosure.conditions.map((c,i)=>(<span key={i} className="pill pill-amber" style={{margin:"2px"}}>{c}</span>))}
+          {(r.nonDisclosure?.conditions || []).length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              {r.nonDisclosure.conditions.map((c, i) => (
+                <span key={i} className="pill pill-amber" style={{ margin: "2px" }}>{c}</span>
+              ))}
             </div>
           )}
-          <div style={{fontSize:13,color:"#555",lineHeight:1.7}}>{r.nonDisclosure?.note}</div>
+          <div style={{ fontSize: 13, color: "#555", lineHeight: 1.7 }}>{r.nonDisclosure?.note}</div>
         </div>
       </div>
 
       <div className="grid-2">
         <div className="card">
           <div className="card-title">Cashless claim checklist</div>
-          {(r.cashlessChecklist||[]).map((s,i)=>(
+          {(r.cashlessChecklist || []).map((s, i) => (
             <div key={i} className="check-row">
-              <div className="check-circle neutral">{i+1}</div>
+              <div className="check-circle neutral">{i + 1}</div>
               <div className="check-label">{s}</div>
             </div>
           ))}
         </div>
         <div className="card">
           <div className="card-title">Reimbursement checklist</div>
-          {(r.reimbursementChecklist||[]).map((s,i)=>(
+          {(r.reimbursementChecklist || []).map((s, i) => (
             <div key={i} className="check-row">
-              <div className="check-circle neutral">{i+1}</div>
+              <div className="check-circle neutral">{i + 1}</div>
               <div className="check-label">{s}</div>
             </div>
           ))}
@@ -730,13 +843,13 @@ function AnalysisResult({result}) {
       <div className="card">
         <div className="card-title">Overall assessment</div>
         <div className={`verdict-block ${verdictClass}`}>
-          <div className="verdict-title" style={{color: verdictClass==="safe"?"#2d7a4f":verdictClass==="risky"?"#9a2020":"#8a6200"}}>
-            {verdictClass==="safe" ? "✓ Favourable" : verdictClass==="risky" ? "⚠ High risk" : "~ Exercise caution"}
+          <div className="verdict-title" style={{ color: verdictClass === "safe" ? "#2d7a4f" : verdictClass === "risky" ? "#9a2020" : "#8a6200" }}>
+            {verdictClass === "safe" ? "✓ Favourable" : verdictClass === "risky" ? "⚠ High risk" : "~ Exercise caution"}
           </div>
           <div className="verdict-text">{r.overallVerdict?.summary}</div>
         </div>
-        <div style={{marginTop:12,display:"flex",flexWrap:"wrap",gap:6}}>
-          {(r.tags||[]).map((t,i)=>(<span key={i} className="badge badge-gray">{t}</span>))}
+        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {(r.tags || []).map((t, i) => (<span key={i} className="badge badge-gray">{t}</span>))}
         </div>
       </div>
     </div>
@@ -755,12 +868,12 @@ function Module_PolicyComparison() {
       const custom = [query.trim()];
       setResults({ conditions: custom, ranked: compareForCondition(custom) });
     } else {
-      const conds = conditions.length > 0 ? conditions : Object.keys(POLICY_DB[0].waitingPeriods.specificIllness).slice(0,3);
+      const conds = conditions.length > 0 ? conditions : Object.keys(POLICY_DB[0].waitingPeriods.specificIllness).slice(0, 3);
       setResults({ conditions: conds, ranked: compareForCondition(conds) });
     }
   };
 
-  const COMMON = ["Cataract","Hernia","Knee replacement","Gall bladder stones","Kidney stones","Diabetes complications","Piles / Fissures","Polycystic ovarian disease"];
+  const COMMON = ["Cataract", "Hernia", "Knee replacement", "Gall bladder stones", "Kidney stones", "Diabetes complications", "Piles / Fissures", "Polycystic ovarian disease"];
 
   return (
     <div>
@@ -771,34 +884,34 @@ function Module_PolicyComparison() {
 
       <div className="card">
         <div className="card-title">Search by condition / diagnosis</div>
-        <div style={{display:"flex",gap:10,marginBottom:12}}>
-          <input type="text" placeholder="e.g. cataract, hernia, knee replacement, diabetes…" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()} style={{flex:1}} />
-          <input type="text" placeholder="Policy age (months)" value={policyAge} onChange={e=>setPolicyAge(e.target.value)} style={{width:180}} />
+        <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+          <input type="text" placeholder="e.g. cataract, hernia, knee replacement, diabetes…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && search()} style={{ flex: 1 }} />
+          <input type="text" placeholder="Policy age (months)" value={policyAge} onChange={e => setPolicyAge(e.target.value)} style={{ width: 180 }} />
           <button className="btn-primary" onClick={search}>Compare ↗</button>
         </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {COMMON.map(c=>(
-            <button key={c} className="btn-ghost" style={{padding:"4px 12px",fontSize:12}} onClick={()=>{setQuery(c);setResults({conditions:[c],ranked:compareForCondition([c])})}}>{c}</button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {COMMON.map(c => (
+            <button key={c} className="btn-ghost" style={{ padding: "4px 12px", fontSize: 12 }} onClick={() => { setQuery(c); setResults({ conditions: [c], ranked: compareForCondition([c]) }); }}>{c}</button>
           ))}
         </div>
       </div>
 
       {results && (
         <div>
-          <div className="card" style={{marginBottom:16}}>
+          <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-title">Analyzing for: {results.conditions.join(", ")}</div>
             <div className="summary-grid">
               <div className="stat-box"><div className="stat-label">Policies analyzed</div><div className="stat-val">{POLICY_DB.length}</div></div>
-              <div className="stat-box"><div className="stat-label">Cover immediately</div><div className="stat-val" style={{color:"#2d7a4f"}}>{results.ranked.filter(r=>r.maxWait===0||(policyAge&&parseInt(policyAge)>=(r.maxWait||0))).length}</div></div>
-              <div className="stat-box"><div className="stat-label">Shortest wait</div><div className="stat-val">{Math.min(...results.ranked.map(r=>r.maxWait))} mo</div></div>
-              <div className="stat-box"><div className="stat-label">Longest wait</div><div className="stat-val">{Math.max(...results.ranked.map(r=>r.maxWait))} mo</div></div>
+              <div className="stat-box"><div className="stat-label">Cover immediately</div><div className="stat-val" style={{ color: "#2d7a4f" }}>{results.ranked.filter(r => r.maxWait === 0 || (policyAge && parseInt(policyAge) >= (r.maxWait || 0))).length}</div></div>
+              <div className="stat-box"><div className="stat-label">Shortest wait</div><div className="stat-val">{Math.min(...results.ranked.map(r => r.maxWait))} mo</div></div>
+              <div className="stat-box"><div className="stat-label">Longest wait</div><div className="stat-val">{Math.max(...results.ranked.map(r => r.maxWait))} mo</div></div>
             </div>
           </div>
 
           <div className="tab-bar">
-            {["waiting","features","comparison"].map(t=>(
-              <div key={t} className={`tab ${activeTab===t?"active":""}`} onClick={()=>setActiveTab(t)}>
-                {t==="waiting"?"Waiting periods":t==="features"?"Policy features":"Full comparison"}
+            {["waiting", "features", "comparison"].map(t => (
+              <div key={t} className={`tab ${activeTab === t ? "active" : ""}`} onClick={() => setActiveTab(t)}>
+                {t === "waiting" ? "Waiting periods" : t === "features" ? "Policy features" : "Full comparison"}
               </div>
             ))}
           </div>
@@ -806,22 +919,22 @@ function Module_PolicyComparison() {
           {activeTab === "waiting" && (
             <div className="card">
               <div className="card-title">Ranked by shortest waiting period</div>
-              {results.ranked.map((r,i)=>{
-                const ageMonths = parseInt(policyAge)||0;
+              {results.ranked.map((r, i) => {
+                const ageMonths = parseInt(policyAge) || 0;
                 const covered = ageMonths >= r.maxWait && r.maxWait >= 0;
                 return (
                   <div key={r.policy.id} className="policy-row">
-                    <div className={`policy-rank ${i<3?"top":""}`}>{i+1}</div>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <div className={`policy-rank ${i < 3 ? "top" : ""}`}>{i + 1}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                         <div className="policy-name">{r.policy.product}</div>
                         <div className="policy-insurer">{r.policy.insurer}</div>
-                        {policyAge && <span className={`badge ${covered?"badge-green":"badge-red"}`}>{covered?"Covered now":"Waiting active"}</span>}
+                        {policyAge && <span className={`badge ${covered ? "badge-green" : "badge-red"}`}>{covered ? "Covered now" : "Waiting active"}</span>}
                       </div>
                       <div className="policy-tags">
-                        {r.waits.map((w,j)=>(
-                          <span key={j} className={`pill ${w.months===null?"pill-gray":w.months<=12?"pill-green":w.months<=24?"pill-amber":"pill-red"}`}>
-                            {w.condition}: {w.months===null?"Not listed":w.months+" mo"}
+                        {r.waits.map((w, j) => (
+                          <span key={j} className={`pill ${w.months === null ? "pill-gray" : w.months <= 12 ? "pill-green" : w.months <= 24 ? "pill-amber" : "pill-red"}`}>
+                            {w.condition}: {w.months === null ? "Not listed" : w.months + " mo"}
                           </span>
                         ))}
                         <span className="pill pill-gray">PED: {r.policy.waitingPeriods.ped} mo</span>
@@ -829,9 +942,9 @@ function Module_PolicyComparison() {
                       {r.policy.copay.applicable && <div className="policy-detail">⚠ {r.policy.copay.percent}% copay applies</div>}
                       {r.policy.roomRent.type !== "any" && <div className="policy-detail">⚠ Room rent: {r.policy.roomRent.note}</div>}
                     </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:20,fontWeight:500,color: r.maxWait<=12?"#2d7a4f":r.maxWait<=24?"#8a6200":"#9a2020"}}>{r.maxWait}<span style={{fontSize:12,fontWeight:400,color:"#888"}}> mo</span></div>
-                      <div style={{fontSize:11,color:"#aaa"}}>max wait</div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 20, fontWeight: 500, color: r.maxWait <= 12 ? "#2d7a4f" : r.maxWait <= 24 ? "#8a6200" : "#9a2020" }}>{r.maxWait}<span style={{ fontSize: 12, fontWeight: 400, color: "#888" }}> mo</span></div>
+                      <div style={{ fontSize: 11, color: "#aaa" }}>max wait</div>
                     </div>
                   </div>
                 );
@@ -850,16 +963,16 @@ function Module_PolicyComparison() {
                     </tr>
                   </thead>
                   <tbody>
-                    {results.ranked.map(r=>(
+                    {results.ranked.map(r => (
                       <tr key={r.policy.id}>
-                        <td><div style={{fontWeight:500}}>{r.policy.product}</div><div style={{fontSize:11,color:"#888"}}>{r.policy.insurer}</div></td>
-                        <td><span className={`badge ${r.policy.waitingPeriods.ped<=36?"badge-green":"badge-amber"}`}>{r.policy.waitingPeriods.ped} mo</span></td>
-                        <td>{r.policy.copay.applicable?<span className="badge badge-amber">{r.policy.copay.percent}%</span>:<span className="badge badge-green">None</span>}</td>
-                        <td><span className={`badge ${r.policy.roomRent.type==="any"?"badge-green":"badge-amber"}`}>{r.policy.roomRent.type==="any"?"No limit":r.policy.roomRent.note.split("—")[0]}</span></td>
-                        <td>{r.policy.restoration?<span className="badge badge-green">Yes</span>:<span className="badge badge-gray">No</span>}</td>
-                        <td>{r.policy.maternity.covered?<span className="badge badge-green">{r.policy.maternity.waitingPeriod} mo wait</span>:<span className="badge badge-gray">No</span>}</td>
-                        <td>{(r.policy.networkHospitals/1000).toFixed(0)}k+</td>
-                        <td style={{fontSize:12}}>{r.policy.reimbursementTimeline}</td>
+                        <td><div style={{ fontWeight: 500 }}>{r.policy.product}</div><div style={{ fontSize: 11, color: "#888" }}>{r.policy.insurer}</div></td>
+                        <td><span className={`badge ${r.policy.waitingPeriods.ped <= 36 ? "badge-green" : "badge-amber"}`}>{r.policy.waitingPeriods.ped} mo</span></td>
+                        <td>{r.policy.copay.applicable ? <span className="badge badge-amber">{r.policy.copay.percent}%</span> : <span className="badge badge-green">None</span>}</td>
+                        <td><span className={`badge ${r.policy.roomRent.type === "any" ? "badge-green" : "badge-amber"}`}>{r.policy.roomRent.type === "any" ? "No limit" : r.policy.roomRent.note.split("—")[0]}</span></td>
+                        <td>{r.policy.restoration ? <span className="badge badge-green">Yes</span> : <span className="badge badge-gray">No</span>}</td>
+                        <td>{r.policy.maternity.covered ? <span className="badge badge-green">{r.policy.maternity.waitingPeriod} mo wait</span> : <span className="badge badge-gray">No</span>}</td>
+                        <td>{(r.policy.networkHospitals / 1000).toFixed(0)}k+</td>
+                        <td style={{ fontSize: 12 }}>{r.policy.reimbursementTimeline}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -875,30 +988,30 @@ function Module_PolicyComparison() {
                 <table>
                   <thead>
                     <tr>
-                      <th style={{minWidth:120}}>Policy</th>
-                      {results.conditions.map(c=><th key={c}>{c}</th>)}
+                      <th style={{ minWidth: 120 }}>Policy</th>
+                      {results.conditions.map(c => <th key={c}>{c}</th>)}
                       <th>PED</th><th>Initial</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {results.ranked.map(r=>(
+                    {results.ranked.map(r => (
                       <tr key={r.policy.id}>
-                        <td><div style={{fontWeight:500,fontSize:12}}>{r.policy.product}</div><div style={{fontSize:11,color:"#888"}}>{r.policy.insurer}</div></td>
-                        {results.conditions.map(c=>{
-                          const m = getWaitingMonths(r.policy,c);
-                          return <td key={c}><span className={`badge ${m===null?"badge-gray":m<=12?"badge-green":m<=24?"badge-amber":"badge-red"}`}>{m===null?"N/A":m+" mo"}</span></td>;
+                        <td><div style={{ fontWeight: 500, fontSize: 12 }}>{r.policy.product}</div><div style={{ fontSize: 11, color: "#888" }}>{r.policy.insurer}</div></td>
+                        {results.conditions.map(c => {
+                          const m = getWaitingMonths(r.policy, c);
+                          return <td key={c}><span className={`badge ${m === null ? "badge-gray" : m <= 12 ? "badge-green" : m <= 24 ? "badge-amber" : "badge-red"}`}>{m === null ? "N/A" : m + " mo"}</span></td>;
                         })}
-                        <td><span className={`badge ${r.policy.waitingPeriods.ped<=36?"badge-green":"badge-amber"}`}>{r.policy.waitingPeriods.ped} mo</span></td>
+                        <td><span className={`badge ${r.policy.waitingPeriods.ped <= 36 ? "badge-green" : "badge-amber"}`}>{r.policy.waitingPeriods.ped} mo</span></td>
                         <td><span className="badge badge-gray">{r.policy.waitingPeriods.initial} days</span></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div style={{marginTop:12,fontSize:12,color:"#aaa"}}>
-                <span className="badge badge-green" style={{marginRight:6}}>≤12 mo</span>short
-                <span className="badge badge-amber" style={{margin:"0 6px"}}>13–24 mo</span>moderate
-                <span className="badge badge-red" style={{marginRight:6}}>25+ mo</span>long
+              <div style={{ marginTop: 12, fontSize: 12, color: "#aaa" }}>
+                <span className="badge badge-green" style={{ marginRight: 6 }}>≤12 mo</span>short
+                <span className="badge badge-amber" style={{ margin: "0 6px" }}>13–24 mo</span>moderate
+                <span className="badge badge-red" style={{ marginRight: 6 }}>25+ mo</span>long
               </div>
             </div>
           )}
@@ -910,19 +1023,18 @@ function Module_PolicyComparison() {
 
 function Module_DisclosureAudit() {
   const [answers, setAnswers] = useState({});
-  const [submitted, setSubmitted] = useState(false);
   const [policyStart, setPolicyStart] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
 
-  const cats = ["All", ...new Set(DISCLOSURE_QUESTIONS.map(q=>q.cat))];
-  const filtered = activeFilter === "All" ? DISCLOSURE_QUESTIONS : DISCLOSURE_QUESTIONS.filter(q=>q.cat===activeFilter);
+  const cats = ["All", ...new Set(DISCLOSURE_QUESTIONS.map(q => q.cat))];
+  const filtered = activeFilter === "All" ? DISCLOSURE_QUESTIONS : DISCLOSURE_QUESTIONS.filter(q => q.cat === activeFilter);
 
-  const setAnswer = (id, val) => setAnswers(a=>({...a,[id]:val}));
+  const setAnswer = (id, val) => setAnswers(a => ({ ...a, [id]: val }));
 
-  const yesAnswers = DISCLOSURE_QUESTIONS.filter(q=>answers[q.id]==="yes");
-  const highRisk = yesAnswers.filter(q=>q.pedRisk==="high");
-  const medRisk = yesAnswers.filter(q=>q.pedRisk==="medium");
-  const unanswered = DISCLOSURE_QUESTIONS.filter(q=>!answers[q.id]);
+  const yesAnswers = DISCLOSURE_QUESTIONS.filter(q => answers[q.id] === "yes");
+  const highRisk = yesAnswers.filter(q => q.pedRisk === "high");
+  const medRisk = yesAnswers.filter(q => q.pedRisk === "medium");
+  const unanswered = DISCLOSURE_QUESTIONS.filter(q => !answers[q.id]);
 
   const overallRisk = highRisk.length >= 2 ? "high" : highRisk.length === 1 || medRisk.length >= 2 ? "medium" : yesAnswers.length > 0 ? "low" : null;
 
@@ -934,41 +1046,41 @@ function Module_DisclosureAudit() {
       </div>
 
       <div className="card">
-        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
-          <div style={{flex:1}}>
-            <div className="card-title" style={{marginBottom:6}}>When did your policy start?</div>
-            <input type="text" placeholder="e.g. January 2022 or 18 months ago" value={policyStart} onChange={e=>setPolicyStart(e.target.value)} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div className="card-title" style={{ marginBottom: 6 }}>When did your policy start?</div>
+            <input type="text" placeholder="e.g. January 2022 or 18 months ago" value={policyStart} onChange={e => setPolicyStart(e.target.value)} />
           </div>
-          <div style={{display:"flex",gap:12,flexShrink:0}}>
-            <div className="stat-box" style={{minWidth:90,textAlign:"center"}}>
+          <div style={{ display: "flex", gap: 12, flexShrink: 0 }}>
+            <div className="stat-box" style={{ minWidth: 90, textAlign: "center" }}>
               <div className="stat-label">Answered</div>
               <div className="stat-val">{Object.keys(answers).length}/{DISCLOSURE_QUESTIONS.length}</div>
             </div>
-            <div className="stat-box" style={{minWidth:90,textAlign:"center"}}>
+            <div className="stat-box" style={{ minWidth: 90, textAlign: "center" }}>
               <div className="stat-label">Yes answers</div>
-              <div className="stat-val" style={{color:yesAnswers.length>0?"#9a2020":"#2d7a4f"}}>{yesAnswers.length}</div>
+              <div className="stat-val" style={{ color: yesAnswers.length > 0 ? "#9a2020" : "#2d7a4f" }}>{yesAnswers.length}</div>
             </div>
           </div>
         </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {cats.map(c=>(
-            <button key={c} className={activeFilter===c?"btn-primary":"btn-ghost"} style={{padding:"5px 14px",fontSize:12}} onClick={()=>setActiveFilter(c)}>{c}</button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {cats.map(c => (
+            <button key={c} className={activeFilter === c ? "btn-primary" : "btn-ghost"} style={{ padding: "5px 14px", fontSize: 12 }} onClick={() => setActiveFilter(c)}>{c}</button>
           ))}
         </div>
       </div>
 
       <div className="card">
         <div className="card-title">Conditions to declare ({filtered.length})</div>
-        {filtered.map((q,i)=>(
+        {filtered.map((q, i) => (
           <div key={q.id} className="disclosure-q">
             <div className="dq-cat">{q.cat}</div>
-            <div className="dq-label">{i+1 > filtered.indexOf(q) ? "" : ""}{q.condition}</div>
+            <div className="dq-label">{q.condition}</div>
             <div className="dq-options">
-              <button className={`dq-btn ${answers[q.id]==="yes"?"selected-yes":""}`} onClick={()=>setAnswer(q.id,"yes")}>Yes — I have / had this</button>
-              <button className={`dq-btn ${answers[q.id]==="no"?"selected-no":""}`} onClick={()=>setAnswer(q.id,"no")}>No — never</button>
-              <button className={`dq-btn ${answers[q.id]==="unsure"?"btn-primary":""}`} onClick={()=>setAnswer(q.id,"unsure")}>Not sure</button>
+              <button className={`dq-btn ${answers[q.id] === "yes" ? "selected-yes" : ""}`} onClick={() => setAnswer(q.id, "yes")}>Yes — I have / had this</button>
+              <button className={`dq-btn ${answers[q.id] === "no" ? "selected-no" : ""}`} onClick={() => setAnswer(q.id, "no")}>No — never</button>
+              <button className={`dq-btn ${answers[q.id] === "unsure" ? "btn-primary" : ""}`} onClick={() => setAnswer(q.id, "unsure")}>Not sure</button>
             </div>
-            {answers[q.id]==="yes" && <div className="dq-note">⚠ {q.note}</div>}
+            {answers[q.id] === "yes" && <div className="dq-note">⚠ {q.note}</div>}
           </div>
         ))}
       </div>
@@ -976,21 +1088,21 @@ function Module_DisclosureAudit() {
       {yesAnswers.length > 0 && (
         <div className="card">
           <div className="card-title">Disclosure risk summary</div>
-          <div className={`verdict-block ${overallRisk==="high"?"risky":overallRisk==="medium"?"caution":"safe"}`} style={{marginBottom:16}}>
+          <div className={`verdict-block ${overallRisk === "high" ? "risky" : overallRisk === "medium" ? "caution" : "safe"}`} style={{ marginBottom: 16 }}>
             <div className="verdict-title">
-              {overallRisk==="high" ? "⚠ High non-disclosure risk" : overallRisk==="medium" ? "~ Medium risk — review carefully" : "✓ Low risk — declarations appear complete"}
+              {overallRisk === "high" ? "⚠ High non-disclosure risk" : overallRisk === "medium" ? "~ Medium risk — review carefully" : "✓ Low risk — declarations appear complete"}
             </div>
             <div className="verdict-text">
-              You have answered "Yes" to {yesAnswers.length} condition{yesAnswers.length>1?"s":""}, of which {highRisk.length} are high-risk for claim rejection if undeclared.
-              {highRisk.length > 0 && ` High-risk conditions: ${highRisk.map(q=>q.condition.split(" /")[0]).join(", ")}.`}
+              You have answered "Yes" to {yesAnswers.length} condition{yesAnswers.length > 1 ? "s" : ""}, of which {highRisk.length} are high-risk for claim rejection if undeclared.
+              {highRisk.length > 0 && ` High-risk conditions: ${highRisk.map(q => q.condition.split(" /")[0]).join(", ")}.`}
               {" "}If any of these were not declared in the proposal form, contact your insurer immediately for a material fact endorsement.
             </div>
           </div>
 
           {highRisk.length > 0 && (
             <>
-              <div style={{fontSize:12,fontWeight:500,color:"#9a2020",marginBottom:10}}>HIGH RISK — must be declared</div>
-              {highRisk.map(q=>(
+              <div style={{ fontSize: 12, fontWeight: 500, color: "#9a2020", marginBottom: 10 }}>HIGH RISK — must be declared</div>
+              {highRisk.map(q => (
                 <div key={q.id} className="flag-bar danger">
                   <div>
                     <div className="flag-label">{q.condition}</div>
@@ -1002,8 +1114,8 @@ function Module_DisclosureAudit() {
           )}
           {medRisk.length > 0 && (
             <>
-              <div style={{fontSize:12,fontWeight:500,color:"#8a6200",margin:"14px 0 10px"}}>MEDIUM RISK — should be declared</div>
-              {medRisk.map(q=>(
+              <div style={{ fontSize: 12, fontWeight: 500, color: "#8a6200", margin: "14px 0 10px" }}>MEDIUM RISK — should be declared</div>
+              {medRisk.map(q => (
                 <div key={q.id} className="flag-bar warning">
                   <div>
                     <div className="flag-label">{q.condition}</div>
@@ -1013,14 +1125,14 @@ function Module_DisclosureAudit() {
               ))}
             </>
           )}
-          <div style={{marginTop:16,padding:"12px 16px",background:"#faf9f6",borderRadius:8,fontSize:12,color:"#555",lineHeight:1.7}}>
+          <div style={{ marginTop: 16, padding: "12px 16px", background: "#faf9f6", borderRadius: 8, fontSize: 12, color: "#555", lineHeight: 1.7 }}>
             <strong>What to do:</strong> If you answered "yes" to any condition that was not declared in your proposal form, contact your insurer in writing to add a material fact endorsement. This may result in a loading on premium or exclusion, but it protects your claim. Failing to disclose gives the insurer grounds to repudiate any future claim under Section 45 of the Insurance Act.
           </div>
         </div>
       )}
 
       {unanswered.length === 0 && yesAnswers.length === 0 && (
-        <div className="verdict-block safe" style={{padding:"18px 20px"}}>
+        <div className="verdict-block safe" style={{ padding: "18px 20px" }}>
           <div className="verdict-title">✓ No disclosures required based on your answers</div>
           <div className="verdict-text">All questions answered as "No" — your policy appears to have full coverage without PED concerns.</div>
         </div>
@@ -1043,7 +1155,8 @@ function Module_TPALookup() {
 
   const checkHospital = async () => {
     if (!selected || !hospital) return;
-    setLoadingCheck(true); setCheckResult(null);
+    setLoadingCheck(true);
+    setCheckResult(null);
     const sys = `You are a health insurance TPA expert in India. Based on the TPA and hospital provided, give guidance on network status in a JSON object:
 {
   "likelyNetwork": true|false|"unknown",
@@ -1055,15 +1168,23 @@ function Module_TPALookup() {
 }
 Return ONLY valid JSON.`;
     try {
-      const res = await fetch("/api/claude",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:600,system:sys,
-          messages:[{role:"user",content:`TPA: ${selected.name} (${selected.insurer}). Hospital: ${hospital}. Is this hospital likely in-network? Network size: ${selected.network} hospitals across India.`}]})
+      const res = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5",
+          max_tokens: 1000,
+          system: sys,
+          messages: [{ role: "user", content: `TPA: ${selected.name} (${selected.insurer}). Hospital: ${hospital}. Is this hospital likely in-network? Network size: ${selected.network} hospitals across India.` }]
+        })
       });
       const data = await res.json();
-      if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); if (!data.content) throw new Error(data.error?.message || JSON.stringify(data)); const raw = data.content.map(b=>b.text||"").join("").replace(/```json|```/g,"").trim();
+      if (!data.content) throw new Error("No response from API");
+      const raw = data.content.map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
       setCheckResult(JSON.parse(raw));
-    } catch(e) { setCheckResult({likelyNetwork:"unknown",confidence:"low",note:"Unable to check automatically. Please call the TPA hotline directly.",preAuthSteps:["Call TPA hotline","Confirm hospital empanelment","Proceed with pre-auth"],documentsNeeded:[],claimHotline:selected.hotline}); }
+    } catch (e) {
+      setCheckResult({ likelyNetwork: "unknown", confidence: "low", note: "Unable to check automatically. Please call the TPA hotline directly.", preAuthSteps: ["Call TPA hotline", "Confirm hospital empanelment", "Proceed with pre-auth"], documentsNeeded: [], claimHotline: selected.hotline });
+    }
     setLoadingCheck(false);
   };
 
@@ -1078,17 +1199,17 @@ Return ONLY valid JSON.`;
         <div className="card-title">Select your TPA</div>
         <div className="search-box">
           <div className="search-icon">🔍</div>
-          <input type="search" placeholder="Search by insurer or TPA name…" value={search} onChange={e=>setSearch(e.target.value)} />
+          <input type="search" placeholder="Search by insurer or TPA name…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {filtered.map(t=>(
-            <div key={t.name} className="tpa-card" style={{cursor:"pointer",borderColor:selected?.name===t.name?"#c9a96e":"#e8e3da",background:selected?.name===t.name?"#fdf8ee":"#fff"}} onClick={()=>{setSelected(t);setCheckResult(null);}}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {filtered.map(t => (
+            <div key={t.name} className="tpa-card" style={{ cursor: "pointer", borderColor: selected?.name === t.name ? "#c9a96e" : "#e8e3da", background: selected?.name === t.name ? "#fdf8ee" : "#fff" }} onClick={() => { setSelected(t); setCheckResult(null); }}>
               <div className="tpa-name">{t.name}</div>
               <div className="tpa-insurer">{t.insurer}</div>
-              <div style={{marginTop:10,display:"flex",gap:8,flexWrap:"wrap"}}>
-                <span className="badge badge-gray">{(t.network/1000).toFixed(0)}k+ hospitals</span>
+              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="badge badge-gray">{(t.network / 1000).toFixed(0)}k+ hospitals</span>
               </div>
-              <div className="tpa-hotline" style={{marginTop:8}}>📞 {t.hotline}</div>
+              <div className="tpa-hotline" style={{ marginTop: 8 }}>📞 {t.hotline}</div>
             </div>
           ))}
         </div>
@@ -1097,23 +1218,23 @@ Return ONLY valid JSON.`;
       {selected && (
         <div className="card">
           <div className="card-title">Check hospital network — {selected.name}</div>
-          <div style={{display:"flex",gap:10,marginBottom:16}}>
-            <input type="text" placeholder="Enter hospital name and city e.g. Apollo Hospital Bangalore" value={hospital} onChange={e=>setHospital(e.target.value)} style={{flex:1}} />
-            <button className="btn-primary" onClick={checkHospital} disabled={!hospital||loadingCheck}>
-              {loadingCheck && <span className="spinner"/>}{loadingCheck?"Checking…":"Check ↗"}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            <input type="text" placeholder="Enter hospital name and city e.g. Apollo Hospital Bangalore" value={hospital} onChange={e => setHospital(e.target.value)} style={{ flex: 1 }} />
+            <button className="btn-primary" onClick={checkHospital} disabled={!hospital || loadingCheck}>
+              {loadingCheck && <span className="spinner" />}{loadingCheck ? "Checking…" : "Check ↗"}
             </button>
           </div>
 
-          <div style={{padding:"14px 16px",background:"#faf9f6",borderRadius:8,fontSize:13,color:"#555",lineHeight:1.7}}>
+          <div style={{ padding: "14px 16px", background: "#faf9f6", borderRadius: 8, fontSize: 13, color: "#555", lineHeight: 1.7 }}>
             <strong>Important:</strong> Always verify network status directly with {selected.name} before admission. Call {selected.hotline} or visit {selected.portal} for real-time verification.
           </div>
 
           {checkResult && (
-            <div style={{marginTop:16}}>
-              <div className={`verdict-block ${checkResult.likelyNetwork===true?"safe":checkResult.likelyNetwork===false?"risky":"caution"}`} style={{marginBottom:14}}>
+            <div style={{ marginTop: 16 }}>
+              <div className={`verdict-block ${checkResult.likelyNetwork === true ? "safe" : checkResult.likelyNetwork === false ? "risky" : "caution"}`} style={{ marginBottom: 14 }}>
                 <div className="verdict-title">
-                  {checkResult.likelyNetwork===true ? "✓ Likely in-network" : checkResult.likelyNetwork===false ? "⚠ Possibly out-of-network" : "~ Network status unclear"}
-                  <span style={{marginLeft:8}} className={`badge ${checkResult.confidence==="high"?"badge-green":checkResult.confidence==="medium"?"badge-amber":"badge-red"}`}>{checkResult.confidence} confidence</span>
+                  {checkResult.likelyNetwork === true ? "✓ Likely in-network" : checkResult.likelyNetwork === false ? "⚠ Possibly out-of-network" : "~ Network status unclear"}
+                  <span style={{ marginLeft: 8 }} className={`badge ${checkResult.confidence === "high" ? "badge-green" : checkResult.confidence === "medium" ? "badge-amber" : "badge-red"}`}>{checkResult.confidence} confidence</span>
                 </div>
                 <div className="verdict-text">{checkResult.note}</div>
               </div>
@@ -1121,10 +1242,10 @@ Return ONLY valid JSON.`;
               <div className="grid-2">
                 {checkResult.preAuthSteps?.length > 0 && (
                   <div>
-                    <div style={{fontSize:12,fontWeight:500,color:"#666",marginBottom:8}}>PRE-AUTH STEPS</div>
-                    {checkResult.preAuthSteps.map((s,i)=>(
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 8 }}>PRE-AUTH STEPS</div>
+                    {checkResult.preAuthSteps.map((s, i) => (
                       <div key={i} className="check-row">
-                        <div className="check-circle neutral">{i+1}</div>
+                        <div className="check-circle neutral">{i + 1}</div>
                         <div className="check-label">{s}</div>
                       </div>
                     ))}
@@ -1132,8 +1253,8 @@ Return ONLY valid JSON.`;
                 )}
                 {checkResult.documentsNeeded?.length > 0 && (
                   <div>
-                    <div style={{fontSize:12,fontWeight:500,color:"#666",marginBottom:8}}>DOCUMENTS NEEDED</div>
-                    {checkResult.documentsNeeded.map((d,i)=>(
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "#666", marginBottom: 8 }}>DOCUMENTS NEEDED</div>
+                    {checkResult.documentsNeeded.map((d, i) => (
                       <div key={i} className="check-row">
                         <div className="check-circle neutral">📄</div>
                         <div className="check-label">{d}</div>
@@ -1149,9 +1270,9 @@ Return ONLY valid JSON.`;
 
       <div className="card">
         <div className="card-title">IRDA standard exclusions — applicable to all policies</div>
-        {IRDA_EXCLUSIONS.map(e=>(
+        {IRDA_EXCLUSIONS.map(e => (
           <div key={e.code} className="check-row">
-            <div className="check-circle" style={{background:"#f0ede8",color:"#888",fontSize:10}}>{e.code}</div>
+            <div className="check-circle" style={{ background: "#f0ede8", color: "#888", fontSize: 10 }}>{e.code}</div>
             <div>
               <div className="check-label">{e.name}</div>
               <div className="check-note">{e.desc}</div>
@@ -1165,16 +1286,16 @@ Return ONLY valid JSON.`;
 
 function Module_PolicyDB() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState({ped:"",copay:"",roomRent:"",maternity:""});
+  const [filter, setFilter] = useState({ ped: "", copay: "", roomRent: "", maternity: "" });
   const [selected, setSelected] = useState(null);
 
   const filtered = POLICY_DB.filter(p => {
     const s = search.toLowerCase();
     const nameMatch = !s || p.product.toLowerCase().includes(s) || p.insurer.toLowerCase().includes(s);
-    const pedMatch = !filter.ped || (filter.ped==="36" ? p.waitingPeriods.ped<=36 : p.waitingPeriods.ped<=48);
-    const copayMatch = !filter.copay || (filter.copay==="no" ? !p.copay.applicable : true);
-    const rrMatch = !filter.roomRent || (filter.roomRent==="any" ? p.roomRent.type==="any" : true);
-    const matMatch = !filter.maternity || (filter.maternity==="yes" ? p.maternity.covered : true);
+    const pedMatch = !filter.ped || (filter.ped === "36" ? p.waitingPeriods.ped <= 36 : p.waitingPeriods.ped <= 48);
+    const copayMatch = !filter.copay || (filter.copay === "no" ? !p.copay.applicable : true);
+    const rrMatch = !filter.roomRent || (filter.roomRent === "any" ? p.roomRent.type === "any" : true);
+    const matMatch = !filter.maternity || (filter.maternity === "yes" ? p.maternity.covered : true);
     return nameMatch && pedMatch && copayMatch && rrMatch && matMatch;
   });
 
@@ -1187,28 +1308,28 @@ function Module_PolicyDB() {
 
       <div className="card">
         <div className="card-title">Filter policies</div>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:12}}>
-          <input type="search" placeholder="Search by product or insurer…" value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:200}} />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <input type="search" placeholder="Search by product or insurer…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <select value={filter.ped} onChange={e=>setFilter(f=>({...f,ped:e.target.value}))} style={{width:"auto",paddingRight:28}}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select value={filter.ped} onChange={e => setFilter(f => ({ ...f, ped: e.target.value }))} style={{ width: "auto", paddingRight: 28 }}>
             <option value="">PED wait: Any</option>
             <option value="36">PED ≤ 36 months</option>
             <option value="48">PED ≤ 48 months</option>
           </select>
-          <select value={filter.copay} onChange={e=>setFilter(f=>({...f,copay:e.target.value}))} style={{width:"auto",paddingRight:28}}>
+          <select value={filter.copay} onChange={e => setFilter(f => ({ ...f, copay: e.target.value }))} style={{ width: "auto", paddingRight: 28 }}>
             <option value="">Copay: Any</option>
             <option value="no">No copay</option>
           </select>
-          <select value={filter.roomRent} onChange={e=>setFilter(f=>({...f,roomRent:e.target.value}))} style={{width:"auto",paddingRight:28}}>
+          <select value={filter.roomRent} onChange={e => setFilter(f => ({ ...f, roomRent: e.target.value }))} style={{ width: "auto", paddingRight: 28 }}>
             <option value="">Room rent: Any</option>
             <option value="any">No sub-limit</option>
           </select>
-          <select value={filter.maternity} onChange={e=>setFilter(f=>({...f,maternity:e.target.value}))} style={{width:"auto",paddingRight:28}}>
+          <select value={filter.maternity} onChange={e => setFilter(f => ({ ...f, maternity: e.target.value }))} style={{ width: "auto", paddingRight: 28 }}>
             <option value="">Maternity: Any</option>
             <option value="yes">Maternity covered</option>
           </select>
-          <button className="btn-ghost" onClick={()=>{setSearch("");setFilter({ped:"",copay:"",roomRent:"",maternity:""});}}>Clear</button>
+          <button className="btn-ghost" onClick={() => { setSearch(""); setFilter({ ped: "", copay: "", roomRent: "", maternity: "" }); }}>Clear</button>
         </div>
       </div>
 
@@ -1222,20 +1343,20 @@ function Module_PolicyDB() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p=>(
-                <tr key={p.id} style={{cursor:"pointer"}} onClick={()=>setSelected(selected?.id===p.id?null:p)}>
+              {filtered.map(p => (
+                <tr key={p.id} style={{ cursor: "pointer" }} onClick={() => setSelected(selected?.id === p.id ? null : p)}>
                   <td>
-                    <div style={{fontWeight:500}}>{p.product}</div>
-                    <div style={{fontSize:11,color:"#888"}}>{p.insurer}</div>
-                    <div style={{fontSize:11,color:"#aaa",marginTop:2}}>{p.type}</div>
+                    <div style={{ fontWeight: 500 }}>{p.product}</div>
+                    <div style={{ fontSize: 11, color: "#888" }}>{p.insurer}</div>
+                    <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{p.type}</div>
                   </td>
-                  <td><span className={`badge ${p.waitingPeriods.ped<=36?"badge-green":"badge-amber"}`}>{p.waitingPeriods.ped} mo</span></td>
-                  <td style={{fontSize:12}}>12–48 mo range</td>
-                  <td>{p.copay.applicable?<span className="badge badge-amber">{p.copay.percent}%</span>:<span className="badge badge-green">None</span>}</td>
-                  <td><span className={`badge ${p.roomRent.type==="any"?"badge-green":"badge-amber"}`}>{p.roomRent.type==="any"?"No limit":"Has limit"}</span></td>
-                  <td>{p.maternity.covered?<span className="badge badge-green">{p.maternity.waitingPeriod}mo</span>:<span className="badge badge-gray">No</span>}</td>
-                  <td style={{fontSize:12}}>{(p.networkHospitals/1000).toFixed(0)}k+</td>
-                  <td style={{fontSize:12}}>{p.reimbursementTimeline}</td>
+                  <td><span className={`badge ${p.waitingPeriods.ped <= 36 ? "badge-green" : "badge-amber"}`}>{p.waitingPeriods.ped} mo</span></td>
+                  <td style={{ fontSize: 12 }}>12–48 mo range</td>
+                  <td>{p.copay.applicable ? <span className="badge badge-amber">{p.copay.percent}%</span> : <span className="badge badge-green">None</span>}</td>
+                  <td><span className={`badge ${p.roomRent.type === "any" ? "badge-green" : "badge-amber"}`}>{p.roomRent.type === "any" ? "No limit" : "Has limit"}</span></td>
+                  <td>{p.maternity.covered ? <span className="badge badge-green">{p.maternity.waitingPeriod}mo</span> : <span className="badge badge-gray">No</span>}</td>
+                  <td style={{ fontSize: 12 }}>{(p.networkHospitals / 1000).toFixed(0)}k+</td>
+                  <td style={{ fontSize: 12 }}>{p.reimbursementTimeline}</td>
                 </tr>
               ))}
             </tbody>
@@ -1245,61 +1366,61 @@ function Module_PolicyDB() {
 
       {selected && (
         <div className="card">
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{fontFamily:"DM Serif Display, serif",fontSize:20,marginBottom:4}}>{selected.product}</div>
-              <div style={{color:"#888",fontSize:13}}>{selected.insurer} · {selected.type} · TPA: {selected.tpa}</div>
+              <div style={{ fontFamily: "DM Serif Display, serif", fontSize: 20, marginBottom: 4 }}>{selected.product}</div>
+              <div style={{ color: "#888", fontSize: 13 }}>{selected.insurer} · {selected.type} · TPA: {selected.tpa}</div>
             </div>
-            <button className="btn-ghost" onClick={()=>setSelected(null)} style={{flexShrink:0}}>Close</button>
+            <button className="btn-ghost" onClick={() => setSelected(null)} style={{ flexShrink: 0 }}>Close</button>
           </div>
-          <hr style={{border:"none",borderTop:"1px solid #f0ede8",margin:"16px 0"}} />
-          <div className="grid-3" style={{marginBottom:16}}>
+          <hr style={{ border: "none", borderTop: "1px solid #f0ede8", margin: "16px 0" }} />
+          <div className="grid-3" style={{ marginBottom: 16 }}>
             <div className="stat-box"><div className="stat-label">PED waiting period</div><div className="stat-val">{selected.waitingPeriods.ped} months</div></div>
-            <div className="stat-box"><div className="stat-label">Network hospitals</div><div className="stat-val">{(selected.networkHospitals/1000).toFixed(0)}k+</div></div>
-            <div className="stat-box"><div className="stat-label">Reimbursement</div><div className="stat-val" style={{fontSize:14}}>{selected.reimbursementTimeline}</div></div>
+            <div className="stat-box"><div className="stat-label">Network hospitals</div><div className="stat-val">{(selected.networkHospitals / 1000).toFixed(0)}k+</div></div>
+            <div className="stat-box"><div className="stat-label">Reimbursement</div><div className="stat-val" style={{ fontSize: 14 }}>{selected.reimbursementTimeline}</div></div>
           </div>
 
           <div className="grid-2">
             <div>
-              <div style={{fontSize:12,fontWeight:500,color:"#888",marginBottom:8}}>SPECIFIC ILLNESS WAITING PERIODS</div>
-              {Object.entries(selected.waitingPeriods.specificIllness).map(([k,v])=>(
-                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #f5f3ef",fontSize:13}}>
-                  <span style={{color:"#444"}}>{k}</span>
-                  <span className={`badge ${v<=12?"badge-green":v<=24?"badge-amber":"badge-red"}`}>{v} mo</span>
+              <div style={{ fontSize: 12, fontWeight: 500, color: "#888", marginBottom: 8 }}>SPECIFIC ILLNESS WAITING PERIODS</div>
+              {Object.entries(selected.waitingPeriods.specificIllness).map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #f5f3ef", fontSize: 13 }}>
+                  <span style={{ color: "#444" }}>{k}</span>
+                  <span className={`badge ${v <= 12 ? "badge-green" : v <= 24 ? "badge-amber" : "badge-red"}`}>{v} mo</span>
                 </div>
               ))}
             </div>
             <div>
-              <div style={{fontSize:12,fontWeight:500,color:"#888",marginBottom:8}}>KEY POLICY TERMS</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: "#888", marginBottom: 8 }}>KEY POLICY TERMS</div>
               {[
-                {label:"Copay",val: selected.copay.applicable ? `${selected.copay.percent}% on all claims` : "None",ok:!selected.copay.applicable},
-                {label:"Room rent",val:selected.roomRent.note,ok:selected.roomRent.type==="any"},
-                {label:"Restoration",val:selected.restoration?"Yes":"No",ok:selected.restoration},
-                {label:"Maternity",val:selected.maternity.covered?`Yes — ${selected.maternity.waitingPeriod}mo wait, ₹${(selected.maternity.sublimit||0).toLocaleString()} limit`:"Not covered",ok:selected.maternity.covered},
-                {label:"NCB",val:selected.ncb},
-                {label:"Cashless pre-auth",val:selected.cashlessProcess},
-              ].map((r,i)=>(
-                <div key={i} style={{padding:"7px 0",borderBottom:"1px solid #f5f3ef"}}>
-                  <div style={{fontSize:11,color:"#aaa"}}>{r.label}</div>
-                  <div style={{fontSize:13,color:"#333",marginTop:2}}>{r.val}</div>
+                { label: "Copay", val: selected.copay.applicable ? `${selected.copay.percent}% on all claims` : "None", ok: !selected.copay.applicable },
+                { label: "Room rent", val: selected.roomRent.note, ok: selected.roomRent.type === "any" },
+                { label: "Restoration", val: selected.restoration ? "Yes" : "No", ok: selected.restoration },
+                { label: "Maternity", val: selected.maternity.covered ? `Yes — ${selected.maternity.waitingPeriod}mo wait, ₹${(selected.maternity.sublimit || 0).toLocaleString()} limit` : "Not covered", ok: selected.maternity.covered },
+                { label: "NCB", val: selected.ncb },
+                { label: "Cashless pre-auth", val: selected.cashlessProcess },
+              ].map((r, i) => (
+                <div key={i} style={{ padding: "7px 0", borderBottom: "1px solid #f5f3ef" }}>
+                  <div style={{ fontSize: 11, color: "#aaa" }}>{r.label}</div>
+                  <div style={{ fontSize: 13, color: "#333", marginTop: 2 }}>{r.val}</div>
                 </div>
               ))}
 
-              {Object.keys(selected.subLimits||{}).length > 0 && (
-                <div style={{marginTop:14}}>
-                  <div style={{fontSize:12,fontWeight:500,color:"#9a2020",marginBottom:6}}>⚠ SUB-LIMITS</div>
-                  {Object.entries(selected.subLimits).map(([k,v])=>(
-                    <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13}}>
-                      <span>{k}</span><span style={{fontWeight:500}}>₹{v.toLocaleString()}</span>
+              {Object.keys(selected.subLimits || {}).length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "#9a2020", marginBottom: 6 }}>⚠ SUB-LIMITS</div>
+                  {Object.entries(selected.subLimits).map(([k, v]) => (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
+                      <span>{k}</span><span style={{ fontWeight: 500 }}>₹{v.toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div style={{marginTop:14}}>
-                <div style={{fontSize:12,fontWeight:500,color:"#888",marginBottom:6}}>POLICY EXCLUSIONS</div>
-                {selected.exclusions.slice(0,5).map((e,i)=>(
-                  <div key={i} style={{fontSize:12,color:"#777",padding:"3px 0",borderBottom:"1px solid #f8f6f2"}}>• {e}</div>
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: "#888", marginBottom: 6 }}>POLICY EXCLUSIONS</div>
+                {selected.exclusions.slice(0, 5).map((e, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "#777", padding: "3px 0", borderBottom: "1px solid #f8f6f2" }}>• {e}</div>
                 ))}
               </div>
             </div>
@@ -1330,7 +1451,7 @@ export default function App() {
       <div className="app-shell">
         <div className="sidebar">
           <div className="sidebar-logo">
-            <h1>Policy<br/>Clarity</h1>
+            <h1>Policy<br />Clarity</h1>
             <p>Health Insurance Decoder</p>
           </div>
           <nav className="sidebar-nav">
@@ -1341,10 +1462,10 @@ export default function App() {
               </div>
             ))}
           </nav>
-          <div style={{padding:"20px",borderTop:"1px solid #333",marginTop:"auto",position:"absolute",bottom:0,width:"100%"}}>
-            <div style={{fontSize:10,color:"#555",lineHeight:1.6}}>
-              Based on IRDA guidelines.<br/>
-              Not financial / legal advice.<br/>
+          <div style={{ padding: "20px", borderTop: "1px solid #333", marginTop: "auto", position: "absolute", bottom: 0, width: "100%" }}>
+            <div style={{ fontSize: 10, color: "#555", lineHeight: 1.6 }}>
+              Based on IRDA guidelines.<br />
+              Not financial / legal advice.<br />
               Always verify with your insurer.
             </div>
           </div>
