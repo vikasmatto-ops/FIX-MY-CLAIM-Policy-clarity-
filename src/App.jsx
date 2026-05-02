@@ -567,7 +567,7 @@ Return ONLY valid JSON with this exact structure:
         {type:"text",text:"Analyze the policy document and prescription. Return JSON only, no markdown."}
       ];
       const res = await fetch("https://cheerful-pixie-6d993c.netlify.app/.netlify/functions/claude",{
-        method:"POST",headers:{"Content-Type":"application/json"},mode:"cors",
+        method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:sys,messages:[{role:"user",content}]})
       });
       const data = await res.json();
@@ -1056,7 +1056,7 @@ function Module_TPALookup() {
 Return ONLY valid JSON.`;
     try {
       const res = await fetch("https://cheerful-pixie-6d993c.netlify.app/.netlify/functions/claude",{
-        method:"POST",headers:{"Content-Type":"application/json"},mode:"cors",
+        method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:600,system:sys,
           messages:[{role:"user",content:`TPA: ${selected.name} (${selected.insurer}). Hospital: ${hospital}. Is this hospital likely in-network? Network size: ${selected.network} hospitals across India.`}]})
       });
